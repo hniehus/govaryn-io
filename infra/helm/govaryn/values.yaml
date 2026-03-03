@@ -1,0 +1,31 @@
+image:
+  repository: ghcr.io/your-org/govaryn-api
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  hosts: []
+  tls: []
+
+resources: {}
+
+env:
+  SPRING_PROFILES_ACTIVE: "prod"
+  GOVARYN_TENANT_MODE: "schema" # db|schema|shared (policy decision)
+  GOVARYN_I18N_DEFAULT_LOCALE: "en"
+
+postgres:
+  enabled: true
+  image: postgres:16
+  auth:
+    username: govaryn
+    password: govaryn
+    database: govaryn

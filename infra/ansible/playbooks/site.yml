@@ -1,0 +1,6 @@
+---
+- name: Govaryn SaaS baseline
+  hosts: all
+  become: true
+  roles:
+    - common

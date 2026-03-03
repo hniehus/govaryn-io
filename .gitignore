@@ -1,0 +1,19 @@
+# Java/Maven
+target/
+**/target/
+*.log
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Rust
+target/
+**/target/
+
+# Env
+.env
+.env.*

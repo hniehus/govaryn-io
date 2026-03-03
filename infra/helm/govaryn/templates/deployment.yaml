@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "govaryn.fullname" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "govaryn.name" . }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "govaryn.name" . }}
+    spec:
+      containers:
+        - name: api
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ .Values.env.SPRING_PROFILES_ACTIVE | quote }}
+            - name: GOVARYN_TENANT_MODE
+              value: {{ .Values.env.GOVARYN_TENANT_MODE | quote }}
+            - name: GOVARYN_I18N_DEFAULT_LOCALE
+              value: {{ .Values.env.GOVARYN_I18N_DEFAULT_LOCALE | quote }}

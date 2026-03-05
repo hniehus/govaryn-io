@@ -63,7 +63,7 @@ After merge:
 
 ```bash
 git checkout develop
-git pull
+git pull --rebase origin develop
 git branch -d feature/tenant-audit-stream
 ```
 
@@ -73,7 +73,7 @@ git branch -d feature/tenant-audit-stream
 
 ```bash
 git checkout develop
-git pull
+git pull --rebase origin develop
 
 git checkout -b fix/audit-ordering
 # work...
@@ -91,7 +91,7 @@ Create a release branch from `develop`:
 
 ```bash
 git checkout develop
-git pull
+git pull --rebase origin develop
 
 git checkout -b release/0.3.0
 git push -u origin release/0.3.0
@@ -117,7 +117,7 @@ Merge the release into `master`:
 
 ```bash
 git checkout master
-git pull
+git pull --rebase origin develop
 
 git merge --no-ff release/0.3.0
 git push
@@ -127,7 +127,7 @@ Back-merge into `develop`:
 
 ```bash
 git checkout develop
-git pull
+git pull --rebase origin develop
 
 git merge --no-ff release/0.3.0
 git push
@@ -148,7 +148,7 @@ If something is broken in production and cannot wait for the next release, branc
 
 ```bash
 git checkout master
-git pull
+git pull --rebase origin develop
 
 git checkout -b fix/hotfix-tenant-leak
 # work...
@@ -162,7 +162,7 @@ After merge into `master`, back-port to `develop`:
 
 ```bash
 git checkout develop
-git pull
+git pull --rebase origin develop
 
 git merge --no-ff master
 git push

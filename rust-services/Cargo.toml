@@ -1,3 +1,0 @@
-[workspace]
-members = ["compute-scenarios"]
-resolver = "2"

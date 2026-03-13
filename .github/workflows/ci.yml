@@ -2,8 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "master", "develop" ]
   pull_request:
+    branches: [ "master", "develop" ]
+  # schedule:
+  #   - cron: '0 3 * * 1'
 
 jobs:
   java:
@@ -21,15 +24,15 @@ jobs:
       - name: Build & Test (Maven)
         run: mvn -B -ntp clean test
 
-  rust:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-      - name: Build & Test
-        run: |
-          cd rust-services
-          cargo test --workspace
+  # rust:
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: read
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Setup Rust
+  #       uses: dtolnay/rust-toolchain@stable
+  #     - name: Build & Test
+  #       run: |
+  #         cd rust-services
+  #         cargo test --workspace

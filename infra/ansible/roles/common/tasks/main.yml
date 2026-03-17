@@ -1,7 +1,0 @@
----
-- name: Ensure baseline packages are installed
-  package:
-    name:
-      - curl
-      - ca-certificates
-    state: present

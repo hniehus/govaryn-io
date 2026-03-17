@@ -76,31 +76,10 @@ mvn -B -ntp clean test
 ### 3) Run the API
 
 ```bash
-./run.sh
-# or: mvn -pl kernel spring-boot:run
-# or: ./mvnw -pl kernel spring-boot:run
+mvn -pl apps/api spring-boot:run
+# API:    http://localhost:8080
+# Health: http://localhost:8080/actuator/health
 ```
-
-**Kernel endpoints:**
-- Health: http://localhost:8080/actuator/health
-- Metrics: http://localhost:8080/actuator/metrics
-- Info: http://localhost:8080/actuator/info
-
----
-
-## Monitoring with Spring Boot Actuator
-
-The Kernel includes Spring Boot Actuator for monitoring and metrics.
-
-**Available endpoints** (in `config/application.properties`):
-- `/actuator/health` — application health status
-- `/actuator/metrics` — detailed metrics
-- `/actuator/env` — environment properties
-- `/actuator/configprops` — configuration properties
-
-**Configuration**:
-- `management.endpoints.web.exposure.include` — expose specific endpoints
-- `management.endpoint.health.show-details` — control health endpoint detail level
 
 ---
 

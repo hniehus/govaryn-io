@@ -41,4 +41,16 @@ public class GovarynKernelProperties {
     public void setModuleMode(ModuleMode moduleMode) {
         this.moduleMode = moduleMode;
     }
+
+    // Optional: Runtime validation method
+    public void validateAgainstSchema() {
+        // Example: Check if all required fields are set
+        if (KernelConfigurationSchema.getMetadata("govaryn.kernel.id").required() && (id == null || id.isBlank())) {
+            throw new IllegalArgumentException("Required key govaryn.kernel.id is missing or blank");
+        }
+        if (KernelConfigurationSchema.getMetadata("govaryn.kernel.environment").required() && environment == null) {
+            throw new IllegalArgumentException("Required key govaryn.kernel.environment is missing");
+        }
+        // moduleMode has a default, so no check needed
+    }
 }

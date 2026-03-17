@@ -27,8 +27,8 @@ public class ConfigurationManager {
     private static final Logger logger = LoggerFactory.getLogger(ConfigurationManager.class);
 
     private final Environment environment;
-    static Map<String, Object> mergedConfiguration;
-    private Map<String, ModuleConfigurationSchema> registeredModules = new HashMap<>();
+    protected Map<String, Object> mergedConfiguration;
+    private final Map<String, ModuleConfigurationSchema> registeredModules = new HashMap<>();
 
     @Autowired
     public ConfigurationManager(Environment environment) {
@@ -45,7 +45,7 @@ public class ConfigurationManager {
     public void initialize() {
         logger.info("Initializing ConfigurationManager");
 
-        this.mergedConfiguration = loadAndMergeConfiguration();
+        mergedConfiguration = loadAndMergeConfiguration();
 
         // Validate kernel configuration
         ConfigurationValidator.validate(mergedConfiguration, KernelConfigurationSchema.SCHEMA);

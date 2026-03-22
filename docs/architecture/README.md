@@ -22,3 +22,8 @@ This folder contains the architecture documentation skeleton based on the arc42 
 - Language: English
 - Format: Markdown
 - Link architecture decisions to ADRs in [`docs/adr`](../adr/)
+- Module contract specification: [`module-contract/v1.0.0/specification.md`](./module-contract/v1.0.0/specification.md)
+- Module lifecycle model: [`module-lifecycle/v1.0.0/lifecycle-model.md`](./module-lifecycle/v1.0.0/lifecycle-model.md)
+- Module validator rules: [`module-validation/v1.0.0/validator-rule-catalog.md`](./module-validation/v1.0.0/validator-rule-catalog.md)
+- Module error model: [`module-validation/v1.0.0/error-model.md`](./module-validation/v1.0.0/error-model.md)
+- Module failure policy: [`module-failure-policy/v1.0.0/failure-policy.md`](./module-failure-policy/v1.0.0/failure-policy.md)

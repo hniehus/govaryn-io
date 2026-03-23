@@ -1,13 +1,16 @@
-# ADR-0001: Module Definition, Responsibility Boundaries, and Formal Module Contract
+# ADR-0001: Module System Scope and Kernel-Module Responsibility Boundaries
 
 ## Status
 Accepted
 
 ## Context
-For the planned module system, we currently lack a binding definition of what a module is within the kernel, which responsibilities belong to the kernel, and which belong to the module. Without this boundary, implementations become inconsistent, integration points diverge, and behavior is harder to test.
+For the Govaryn module system, the first increment requires a binding architectural baseline: what a module is, what the kernel owns, what modules own, and what is explicitly excluded from Increment 1. Without this boundary, implementations diverge, integration behavior becomes inconsistent, and lifecycle orchestration is hard to verify.
 
 ## Decision
-### 1) Module Definition
+### 1) Goal of the Module System
+The goal of the module system is to enable runtime-composable capabilities with a stable integration contract, so modules can be developed and evolved independently while the kernel preserves platform consistency, safety checks, and deterministic startup behavior.
+
+### 2) Module Definition
 A module is a runtime-loadable, logically encapsulated functional unit that:
 - provides a clearly defined capability/function,
 - interacts with the kernel exclusively through the formal module contract,
@@ -18,12 +21,16 @@ The following are not modules:
 - pure build/deploy artifacts without a runtime contract,
 - technical helper classes without an independent module lifecycle.
 
-### 2) Responsibility Boundaries: Kernel vs. Module
+### 3) Responsibility Boundaries: Kernel vs. Module
 The kernel is responsible for:
-- module lifecycle (discovery, loading, initialization, stop/unload),
-- module contract validation (compatibility, required metadata),
+- acting as the **gatekeeper** for module admission into the runtime,
+- acting as the **orchestrator** of module lifecycle progression,
+- module discovery and intake,
+- contract validation (compatibility and required metadata),
+- module registration into the runtime registry,
+- module initialization ordering and execution,
 - providing stable kernel services through defined interfaces,
-- isolation, fault boundaries, and observability (system-level logging/metrics).
+- system-level fault boundaries and observability (logging/metrics).
 
 The module is responsible for:
 - business/technical capability within its own scope,
@@ -31,7 +38,16 @@ The module is responsible for:
 - local error handling within the module,
 - version maintenance of its own contract-facing declarations (for example declared dependencies).
 
-### 3) Formal Module Contract (Mandatory Scope)
+### 4) Binding Lifecycle Phases (Increment 1)
+The first increment defines the following phases as mandatory and authoritative:
+- **Discovery**
+- **Validation**
+- **Registration**
+- **Initialization**
+
+Each phase is kernel-controlled. A module must not bypass or reorder these phases.
+
+### 5) Formal Module Contract (Mandatory Scope)
 The following are part of the formal module contract:
 - module identity: unique ID, name, version,
 - contract API version (compatibility checks),
@@ -46,36 +62,26 @@ The following are not part of the formal contract:
 - concrete implementation details of the capability,
 - optional internal caches or optimizations.
 
-### 4) Implementation Boundary (Now vs. Later)
-Implemented now:
+### 6) In Scope (Increment 1)
+- binding definition of the module concept,
+- binding kernel/module responsibility boundaries,
+- kernel-controlled lifecycle phases: Discovery, Validation, Registration, Initialization,
 - contract definition as technical reference (required fields, lifecycle hooks),
 - kernel-side validation of identity, version, and required metadata,
-- base lifecycle in the kernel,
-- documented scope/out-of-scope rules.
+- baseline startup orchestration for module onboarding.
 
-Implemented later:
-- advanced sandbox/security isolation,
-- hot reload beyond restart boundaries,
+### 7) Out of Scope (Increment 1)
+- advanced sandbox/security isolation for untrusted modules,
+- hot reload beyond controlled restart boundaries,
 - distributed module registration across process boundaries,
-- marketplace/signature and trust-chain mechanisms.
+- marketplace/signature and trust-chain mechanisms,
+- cross-major-version compatibility guarantees.
 
 ## Consequences
 - Clear integration boundaries reduce coupling between kernel and modules.
-- The kernel remains evolvable as long as the formal contract is versioned in a stable manner.
+- The gatekeeper/orchestrator role centralizes policy enforcement and startup determinism.
 - Contract validation increases short-term effort but reduces long-term integration errors.
 
 ## Alternatives
 - No formal contract, conventions only: rejected due to high inconsistency and integration risk.
 - Very broad contract with many optional fields: rejected because it adds unnecessary complexity for the initial phase.
-
-## Scope
-- Definition and documentation of the module concept.
-- Binding responsibility boundaries between kernel and module.
-- Definition of the formal module contract elements.
-- Minimal kernel lifecycle and baseline validation for modules.
-
-## Out of Scope
-- Full security sandbox for untrusted modules.
-- Dynamic distributed module orchestration across multiple nodes.
-- Module marketplace, signing, certificate, and trust-chain features.
-- Full backward compatibility across multiple major contract versions.

@@ -18,6 +18,8 @@ class KernelConfigurationSchemaTest {
         assertThat(KernelConfigurationSchema.isKeyAllowed("govaryn.kernel.id")).isTrue();
         assertThat(KernelConfigurationSchema.isKeyAllowed("govaryn.kernel.environment")).isTrue();
         assertThat(KernelConfigurationSchema.isKeyAllowed("govaryn.kernel.module.mode")).isTrue();
+        assertThat(KernelConfigurationSchema.isKeyAllowed("govaryn.kernel.module.plugin-directory")).isTrue();
+        assertThat(KernelConfigurationSchema.isKeyAllowed("govaryn.kernel.module.failure-policy.initialization")).isTrue();
 
         // Check metadata for one key
         var metadata = KernelConfigurationSchema.getMetadata("govaryn.kernel.id");
@@ -46,7 +48,9 @@ class KernelConfigurationSchemaTest {
         assertThat(allowedKeys).containsExactlyInAnyOrder(
             "govaryn.kernel.id",
             "govaryn.kernel.environment",
-            "govaryn.kernel.module.mode"
+            "govaryn.kernel.module.mode",
+            "govaryn.kernel.module.plugin-directory",
+            "govaryn.kernel.module.failure-policy.initialization"
         );
     }
 }

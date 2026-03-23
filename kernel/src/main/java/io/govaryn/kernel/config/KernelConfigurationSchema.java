@@ -55,6 +55,22 @@ public class KernelConfigurationSchema {
             true, // Required (but with default)
             Strictness.STRICT, // Only defined enum values
             List.of("CLASSPATH", "PLUGIN_FOLDER")
+        ),
+        "govaryn.kernel.module.plugin-directory", new ConfigKeyMetadata(
+            "govaryn.kernel.module.plugin-directory",
+            ConfigType.STRING,
+            "./plugins",
+            false,
+            Strictness.NON_STRICT,
+            List.of()
+        ),
+        "govaryn.kernel.module.failure-policy.initialization", new ConfigKeyMetadata(
+            "govaryn.kernel.module.failure-policy.initialization",
+            ConfigType.ENUM,
+            "REJECT_MODULE_CONTINUE",
+            false,
+            Strictness.STRICT,
+            List.of("FAIL_FAST", "REJECT_MODULE_CONTINUE", "MARK_MODULE_DEGRADED")
         )
     );
 

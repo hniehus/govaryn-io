@@ -10,7 +10,10 @@ Validation MUST be executed in this order:
 3. Value and format validation.
 4. Uniqueness validation.
 5. Kernel API compatibility validation.
-6. Entrypoint resolvability validation.
+6. Capability declaration validation.
+7. Required capability resolution.
+8. Mandatory capability cycle detection.
+9. Entrypoint resolvability validation.
 
 Validation stops at first fatal parsing/schema error. Otherwise, rule violations are aggregated.
 
@@ -26,12 +29,16 @@ Validation stops at first fatal parsing/schema error. Otherwise, rule violations
 | --- | --- | --- | --- |
 | `VR-001` | Manifest missing or unreadable | ERROR | `MANIFEST_NOT_FOUND` |
 | `VR-002` | Manifest is not parseable JSON | ERROR | `MANIFEST_PARSE_ERROR` |
-| `VR-003` | Required attribute missing (`moduleId`, `moduleName`, `moduleVersion`, `requiredKernelApiVersion`, `moduleType`, `entryPoint`, `moduleContractVersion`) | ERROR | `REQUIRED_FIELD_MISSING` |
+| `VR-003` | Required attribute missing (`moduleId`, `moduleName`, `moduleVersion`, `requiredKernelApiVersion`, `providedCapabilities`, `requiredCapabilities`, `failurePolicy`, `moduleType`, `entryPoint`, `moduleContractVersion`) | ERROR | `REQUIRED_FIELD_MISSING` |
 | `VR-004` | Required attribute has invalid value or format (including invalid enum/pattern/version format) | ERROR | `INVALID_FIELD_VALUE` |
 | `VR-005` | `moduleId` duplicates another discovered/registered module | ERROR | `DUPLICATE_MODULE_ID` |
 | `VR-006` | `requiredKernelApiVersion` is incompatible with running kernel API | ERROR | `KERNEL_API_INCOMPATIBLE` |
 | `VR-007` | `moduleContractVersion` unsupported by kernel | ERROR | `CONTRACT_VERSION_UNSUPPORTED` |
 | `VR-008` | `entryPoint` cannot be resolved or does not satisfy required lifecycle hooks | ERROR | `ENTRYPOINT_INVALID` |
+| `VR-009` | Capability declarations invalid (`providedCapabilities`/`requiredCapabilities`/`optionalCapabilities` duplicates, invalid IDs, or overlap) | ERROR | `CAPABILITY_DECLARATION_INVALID` |
+| `VR-010` | `failurePolicy` missing required subfields or contains unsupported policy values | ERROR | `FAILURE_POLICY_INVALID` |
+| `VR-011` | One or more `requiredCapabilities` cannot be resolved to any provider | ERROR | `CAPABILITY_UNRESOLVED` |
+| `VR-012` | Mandatory capability dependency graph contains a cycle | ERROR | `CAPABILITY_CYCLE_DETECTED` |
 
 ## 5. Rule Details
 
@@ -44,6 +51,8 @@ Examples:
 - `moduleId` does not match `^[a-z][a-z0-9-]{2,63}$`
 - `moduleVersion` is not semantic version compliant
 - `moduleType` outside allowed enum
+- capability identifier does not match `^[a-z][a-z0-9.:-]{2,127}$`
+- unsupported `failurePolicy` action value
 
 ### VR-005 Duplicate moduleId
 - Duplicate check scope is one kernel instance.
@@ -51,6 +60,25 @@ Examples:
 
 ### VR-006 Kernel API Compatibility
 - `requiredKernelApiVersion` MUST match running kernel API version using semantic version range evaluation.
+
+### VR-009 Capability Declarations
+- `providedCapabilities` MUST contain unique values.
+- `requiredCapabilities` MUST contain unique values.
+- `optionalCapabilities` MUST contain unique values.
+- `providedCapabilities` and `requiredCapabilities` MUST be disjoint in `v1.0.0`.
+- `requiredCapabilities` and `optionalCapabilities` MUST be disjoint in `v1.0.0`.
+
+### VR-010 Failure Policy
+- `failurePolicy.onInitializationFailure` and `failurePolicy.onRuntimeFailure` are mandatory.
+- Allowed values: `FAIL_FAST`, `REJECT_MODULE_CONTINUE`, `MARK_MODULE_DEGRADED`.
+
+### VR-011 Unresolved Required Capability
+- Every entry in `requiredCapabilities` MUST have at least one provider among discovered modules/kernel-provided capabilities.
+- Missing provider is a blocking error.
+
+### VR-012 Capability Cycle
+- Build mandatory capability dependency graph after provider selection.
+- Any cycle in the graph is invalid in `v1.0.0`.
 
 ## 6. Validation Outcome Mapping
 - No `ERROR` findings: module transitions to `validated`.

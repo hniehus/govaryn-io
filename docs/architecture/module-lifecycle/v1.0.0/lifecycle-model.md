@@ -19,6 +19,7 @@ It is the baseline for:
 | `initializing` | Kernel is executing module initialization lifecycle hook(s). |
 | `initialized` | Module is successfully initialized and operational. |
 | `failed` | Runtime or initialization failure occurred after registration. |
+| `degraded` | Module remains active with restricted behavior after policy-approved degradation. |
 
 ## 3. State Diagram
 
@@ -32,6 +33,9 @@ stateDiagram-v2
   initializing --> initialized: init success
   initializing --> failed: init error
   initialized --> failed: runtime error
+  initialized --> degraded: policy mark degraded
+  degraded --> failed: degradation escalates
+  degraded --> initialized: recovery/reset
   failed --> registered: reset
   rejected --> discovered: rescan/update
 ```
@@ -47,6 +51,9 @@ stateDiagram-v2
 | `initializing` | `initialized` | Initialization succeeds | Yes |
 | `initializing` | `failed` | Initialization throws/returns failure | Yes |
 | `initialized` | `failed` | Runtime fatal error or health failure policy triggers failure | Yes |
+| `initialized` | `degraded` | Failure policy resolves runtime failure to degraded mode | Yes |
+| `degraded` | `failed` | Further failure or policy escalation | Yes |
+| `degraded` | `initialized` | Recovery/reset succeeds | Yes |
 | `failed` | `registered` | Kernel reset/recovery action | Yes |
 | `rejected` | `discovered` | Artifact updated or rescan requested | Yes |
 
@@ -62,6 +69,7 @@ All other transitions are invalid and MUST be rejected by the kernel.
 | `registered` | initialize, unregister, inspect | runtime invoke before init |
 | `initializing` | monitor timeout, abort, fail transition | duplicate initialize calls |
 | `initialized` | runtime invocation, health checks, stop/unregister | second initialize without reset |
+| `degraded` | limited runtime invocation, degraded health reporting, recovery/reset, stop/unregister | full-service invocation that violates degraded mode gates |
 | `failed` | inspect failure reason, reset to `registered`, unregister | runtime invocation |
 
 ## 6. Registry Baseline
@@ -76,8 +84,10 @@ Registry writes MUST be atomic per state transition.
 
 ## 7. Error Handling Baseline
 - Validation errors move module to `rejected` with structured reason codes.
-- Initialization/runtime errors move module to `failed` by default; failure policy may override runtime behavior to degraded operation.
+- Initialization errors move module to `failed`.
+- Runtime errors move module to `failed` by default; failure policy may transition module to `degraded` instead.
 - Modules in `failed` are non-routable for runtime invocation until reset.
+- Modules in `degraded` are routable only through degraded-mode gates defined by kernel policy.
 - Kernel MUST emit lifecycle events for every successful transition and every rejected transition request.
 - Policy-based alternatives (for example degraded operation) are defined in:
   [`../../module-failure-policy/v1.0.0/failure-policy.md`](../../module-failure-policy/v1.0.0/failure-policy.md)

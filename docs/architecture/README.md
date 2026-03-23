@@ -27,3 +27,7 @@ This folder contains the architecture documentation skeleton based on the arc42 
 - Module validator rules: [`module-validation/v1.0.0/validator-rule-catalog.md`](./module-validation/v1.0.0/validator-rule-catalog.md)
 - Module error model: [`module-validation/v1.0.0/error-model.md`](./module-validation/v1.0.0/error-model.md)
 - Module failure policy: [`module-failure-policy/v1.0.0/failure-policy.md`](./module-failure-policy/v1.0.0/failure-policy.md)
+- Capability and dependency model: [`module-capability/v1.0.0/capability-dependency-model.md`](./module-capability/v1.0.0/capability-dependency-model.md)
+- Kernel API classification model: [`kernel-api/v1.0.0/api-classification.md`](./kernel-api/v1.0.0/api-classification.md)
+- Module author docs: [`../modules/README.md`](../modules/README.md)
+- Operations docs: [`../operations/README.md`](../operations/README.md)

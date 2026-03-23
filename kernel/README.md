@@ -33,3 +33,6 @@ mvn clean install
 ```
 
 That installs the versioned `govaryn-kernel` artifact into your local Maven repository.
+
+## Reference Modules
+- See [reference module scenarios](../docs/modules/REFERENCE_MODULES.md) for opt-in positive and negative module examples.

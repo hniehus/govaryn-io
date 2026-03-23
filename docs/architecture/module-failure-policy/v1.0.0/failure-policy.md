@@ -11,7 +11,7 @@ This document defines configurable kernel behavior when module failures occur du
 | `REJECT_MODULE_CONTINUE` | Reject/fail the module and continue kernel operation. |
 | `MARK_MODULE_DEGRADED` | Keep kernel running, mark module degraded for routing/health semantics. |
 
-`MARK_MODULE_DEGRADED` in `v1.0.0` is an operational flag (`degraded=true`) and does not introduce a new lifecycle state.
+`MARK_MODULE_DEGRADED` in `v1.0.0` transitions the module to lifecycle state `degraded`.
 
 ## 3. Inputs for Policy Resolution
 Policy engine inputs:
@@ -56,18 +56,38 @@ Evaluation is first-match-wins.
 | `RUNTIME_FAILURE` | runtime | `MARK_MODULE_DEGRADED` or `REJECT_MODULE_CONTINUE` per rule | `MARK_MODULE_DEGRADED` |
 | `STATE_TRANSITION_INVALID` | state-transition | `REJECT_MODULE_CONTINUE` + reject transition | `REJECT_MODULE_CONTINUE` + reject transition |
 
-## 6. Initialization Failure Behavior
-- If failure policy resolves to `FAIL_FAST` during startup:
+## 6. Kernel-Stop vs Module-Only Error Classification
+
+### 6.1 Errors that stop the kernel (`FAIL_FAST`)
+The kernel MUST stop (startup failure or controlled shutdown in runtime mode) when policy resolves to `FAIL_FAST`.
+
+Default `v1.0.0` stop cases:
+- mandatory module initialization failure during startup
+- mandatory module with `CONTRACT_VERSION_UNSUPPORTED`
+- mandatory module with `KERNEL_API_INCOMPATIBLE`
+
+### 6.2 Errors that affect only the module
+If policy resolves to `REJECT_MODULE_CONTINUE` or `MARK_MODULE_DEGRADED`, the kernel MUST continue.
+
+Module-only effects:
+- `REJECT_MODULE_CONTINUE`: module transitions to `rejected` (validation/registration stages) or `failed` (initialization/runtime stages)
+- `MARK_MODULE_DEGRADED`: module transitions to `degraded`
+
+## 7. Initialization Failure Behavior
+Initialization failure behavior is deterministic and stage-specific:
+
+- If initialization fails and policy resolves to `FAIL_FAST`:
   - kernel startup MUST fail with clear root-cause error payload.
-- If failure policy resolves to `REJECT_MODULE_CONTINUE`:
+- If initialization fails and policy resolves to `REJECT_MODULE_CONTINUE`:
   - module transitions to `failed`,
   - module is not routable,
   - kernel startup/runtime continues.
-- If failure policy resolves to `MARK_MODULE_DEGRADED`:
+- If initialization fails and policy resolves to `MARK_MODULE_DEGRADED`:
+  - module transitions to `degraded`,
   - module stays available only for operations allowed by degraded-mode gate,
   - health endpoint MUST report degraded status.
 
-## 7. Configuration Model
+## 8. Configuration Model
 Example configuration:
 
 ```yaml
@@ -90,7 +110,7 @@ module:
         action: REJECT_MODULE_CONTINUE
 ```
 
-## 8. Logging and Operational Requirements
+## 9. Logging and Operational Requirements
 For every policy decision, kernel MUST emit a structured log with:
 - `eventType=module.failure.policy.decision`
 - `policyAction`
@@ -111,7 +131,7 @@ Alerting baseline:
 - Alert on any `FAIL_FAST`.
 - Alert on repeated `MARK_MODULE_DEGRADED` for the same module within a configurable window.
 
-## 9. Conformance
+## 10. Conformance
 An implementation is conformant with `v1.0.0` if it:
 1. supports the three policy actions,
 2. resolves policy by deterministic rule order,

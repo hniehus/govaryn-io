@@ -2,6 +2,8 @@ package io.govaryn.kernel.module.validation;
 
 import io.govaryn.kernel.module.ModuleMetadata;
 import io.govaryn.kernel.module.ModuleType;
+import io.govaryn.kernel.module.ModuleCapabilities;
+import io.govaryn.kernel.module.ModuleFailurePolicy;
 import io.govaryn.kernel.module.discovery.ModuleDiscoveryCandidate;
 import io.govaryn.kernel.module.discovery.ModuleDiscoverySource;
 import org.junit.jupiter.api.DisplayName;
@@ -63,7 +65,13 @@ class DefaultModuleValidatorTest {
         ModuleValidationReport report = reports.getFirst();
 
         assertFalse(report.valid());
-        assertTrue(report.issues().stream().anyMatch(i -> i.code() == ModuleValidationCode.KERNEL_API_INCOMPATIBLE));
+        ModuleValidationIssue issue = report.issues().stream()
+            .filter(i -> i.code() == ModuleValidationCode.KERNEL_API_INCOMPATIBLE)
+            .findFirst()
+            .orElseThrow();
+        assertTrue(issue.message().contains("moduleId 'orders'"));
+        assertTrue(issue.message().contains("requiredKernelApiVersion '^2.0.0'"));
+        assertTrue(issue.message().contains("running kernel API version '1.3.0'"));
     }
 
     @Test
@@ -124,6 +132,83 @@ class DefaultModuleValidatorTest {
         assertTrue(report.issues().stream().anyMatch(i -> i.code() == ModuleValidationCode.CONTRACT_VERSION_UNSUPPORTED));
     }
 
+    @Test
+    @DisplayName("Should report missing providedCapabilities as structured validation issue")
+    void shouldReportMissingProvidedCapabilitiesAsStructuredIssue() {
+        ModuleMetadata metadata = new ModuleMetadata(
+            "1.0.0",
+            "capability-missing",
+            "Capability Missing",
+            "1.0.0",
+            "^1.0.0",
+            ModuleType.FEATURE,
+            "io.govaryn.modules.capability.MissingModule",
+            null,
+            null,
+            null,
+            null,
+            ModuleCapabilities.empty(),
+            ModuleFailurePolicy.defaults(),
+            null,
+            List.of()
+        );
+
+        ModuleDiscoveryCandidate candidate = new ModuleDiscoveryCandidate(
+            metadata,
+            ModuleDiscoverySource.MANIFEST_SCAN,
+            "/plugins/capability-missing/module.json",
+            false
+        );
+
+        ModuleValidationReport report = validator.validate(List.of(candidate), "1.2.0").getFirst();
+
+        assertFalse(report.valid());
+        ModuleValidationIssue issue = report.issues().stream()
+            .filter(i -> i.fieldPath().equals("$.providedCapabilities"))
+            .findFirst()
+            .orElseThrow();
+        assertEquals(ModuleValidationCode.REQUIRED_FIELD_MISSING, issue.code());
+        assertEquals(ModuleValidationSeverity.ERROR, issue.severity());
+        assertFalse(issue.message().isBlank());
+    }
+
+    @Test
+    @DisplayName("Should report invalid requiredKernelApiVersion format")
+    void shouldReportInvalidRequiredKernelApiVersionFormat() {
+        ModuleDiscoveryCandidate candidate = new ModuleDiscoveryCandidate(
+            ModuleMetadata.minimal(
+                "invalid-range",
+                "Invalid Range",
+                "1.0.0",
+                "1.x",
+                ModuleType.FEATURE,
+                "io.govaryn.modules.invalidrange.InvalidRangeModule"
+            ),
+            ModuleDiscoverySource.CLASSPATH,
+            "io.govaryn.modules.invalidrange.InvalidRangeModule",
+            true
+        );
+
+        ModuleValidationReport report = validator.validate(List.of(candidate), "1.2.0").getFirst();
+
+        assertFalse(report.valid());
+        assertTrue(hasIssue(report, ModuleValidationCode.INVALID_FIELD_VALUE, "$.requiredKernelApiVersion"));
+    }
+
+    @Test
+    @DisplayName("Should fail fast when running kernel API version is invalid")
+    void shouldFailFastForInvalidRunningKernelApiVersion() {
+        ModuleDiscoveryCandidate candidate = candidate("orders", "1.0.0", "^1.0.0");
+
+        IllegalStateException ex = assertThrows(
+            IllegalStateException.class,
+            () -> validator.validate(List.of(candidate), "unknown")
+        );
+
+        assertTrue(ex.getMessage().contains("runningKernelApiVersion"));
+        assertTrue(ex.getMessage().contains("unknown"));
+    }
+
     private static ModuleDiscoveryCandidate candidate(String moduleId, String moduleVersion, String requiredKernelApiVersion) {
         return new ModuleDiscoveryCandidate(
             ModuleMetadata.minimal(
@@ -138,5 +223,9 @@ class DefaultModuleValidatorTest {
             "io.govaryn.modules." + moduleId + ".Module",
             true
         );
+    }
+
+    private static boolean hasIssue(ModuleValidationReport report, ModuleValidationCode code, String fieldPath) {
+        return report.issues().stream().anyMatch(issue -> issue.code() == code && fieldPath.equals(issue.fieldPath()));
     }
 }

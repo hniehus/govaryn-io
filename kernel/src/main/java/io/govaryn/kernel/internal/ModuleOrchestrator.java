@@ -70,7 +70,9 @@ public class ModuleOrchestrator implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         KernelContext context = new KernelContext(properties.getId(), properties.getEnvironment(), kernelVersion);
         List<ModuleDiscoveryCandidate> candidates = discoveryService.discover();
-        List<ModuleValidationReport> reports = moduleValidator.validate(candidates, kernelVersion);
+        List<ModuleValidationReport> reports = candidates.isEmpty()
+            ? List.of()
+            : moduleValidator.validate(candidates, kernelVersion);
 
         log.info("Discovered {} module candidate(s) at startup", candidates.size());
         for (ModuleDiscoveryCandidate candidate : candidates) {

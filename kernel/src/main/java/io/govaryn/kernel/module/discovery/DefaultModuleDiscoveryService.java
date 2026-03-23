@@ -16,6 +16,7 @@ import org.springframework.boot.json.JsonParserFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.nio.file.LinkOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -66,26 +67,39 @@ public class DefaultModuleDiscoveryService implements ModuleDiscoveryService {
     }
 
     private List<ModuleDiscoveryCandidate> discoverPluginDirectoryCandidates() {
-        Path pluginDir = Path.of(properties.getModulePluginDirectory());
-        if (!Files.exists(pluginDir)) {
-            log.info("Plugin directory does not exist: {}", pluginDir.toAbsolutePath());
+        Path configuredPluginDir = Path.of(properties.getModulePluginDirectory());
+        if (!Files.exists(configuredPluginDir)) {
+            log.info("Plugin directory does not exist: {}", configuredPluginDir.toAbsolutePath());
             return List.of();
         }
-        if (!Files.isDirectory(pluginDir)) {
-            log.warn("Configured plugin path is not a directory: {}", pluginDir.toAbsolutePath());
+        if (!Files.isDirectory(configuredPluginDir)) {
+            log.warn("Configured plugin path is not a directory: {}", configuredPluginDir.toAbsolutePath());
             return List.of();
         }
+        Path pluginDir = configuredPluginDir.toAbsolutePath().normalize();
 
         List<ModuleDiscoveryCandidate> candidates = new ArrayList<>();
         try (var paths = Files.walk(pluginDir, MAX_SCAN_DEPTH)) {
             paths.filter(Files::isRegularFile)
                 .filter(path -> path.getFileName().toString().equalsIgnoreCase(DEFAULT_MANIFEST_NAME))
+                .filter(path -> isSafeManifestPath(path, pluginDir))
                 .forEach(path -> parseManifest(path).ifPresent(candidates::add));
         } catch (IOException e) {
             log.warn("Failed to scan plugin directory '{}': {}", sanitizeForLog(pluginDir.toAbsolutePath().toString()), sanitizeForLog(e.getMessage()));
         }
 
         return List.copyOf(candidates);
+    }
+
+    private static boolean isSafeManifestPath(Path manifestPath, Path pluginDir) {
+        Path normalizedManifest = manifestPath.toAbsolutePath().normalize();
+        if (!normalizedManifest.startsWith(pluginDir)) {
+            return false;
+        }
+        if (Files.isSymbolicLink(manifestPath)) {
+            return false;
+        }
+        return Files.isRegularFile(manifestPath, LinkOption.NOFOLLOW_LINKS);
     }
 
     private java.util.Optional<ModuleDiscoveryCandidate> parseManifest(Path manifestPath) {

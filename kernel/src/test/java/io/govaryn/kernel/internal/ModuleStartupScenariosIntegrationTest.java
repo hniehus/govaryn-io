@@ -83,6 +83,9 @@ class ModuleStartupScenariosIntegrationTest {
 
         assertTrue(registry.findAll().isEmpty());
         assertTrue(output.getOut().contains("errorType=KERNEL_API_INCOMPATIBLE"));
+        assertTrue(output.getOut().contains("moduleId 'incompatible-module'"));
+        assertTrue(output.getOut().contains("requiredKernelApiVersion '^2.0.0'"));
+        assertTrue(output.getOut().contains("running kernel API version '1.2.0'"));
         assertTrue(output.getOut().contains("event=module_startup_summary found=1 validated=0 rejected=1 registered=0 failed=0 degraded=0"));
     }
 

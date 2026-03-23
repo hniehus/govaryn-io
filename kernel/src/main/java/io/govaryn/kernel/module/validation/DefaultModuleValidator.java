@@ -6,15 +6,18 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 @Service
 public class DefaultModuleValidator implements ModuleValidator {
 
     private static final Pattern MODULE_ID_PATTERN = Pattern.compile("^[a-z][a-z0-9-]{2,63}$");
+    private static final Pattern CAPABILITY_PATTERN = Pattern.compile("^[a-z][a-z0-9.:-]{2,127}$");
     private static final Pattern SEMVER_PATTERN = Pattern.compile(
         "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
     );
@@ -22,6 +25,8 @@ public class DefaultModuleValidator implements ModuleValidator {
 
     @Override
     public List<ModuleValidationReport> validate(List<ModuleDiscoveryCandidate> candidates, String runningKernelApiVersion) {
+        validateRunningKernelApiVersion(runningKernelApiVersion);
+
         Map<String, Integer> moduleIdCounts = new HashMap<>();
         for (ModuleDiscoveryCandidate candidate : candidates) {
             moduleIdCounts.merge(candidate.metadata().moduleId(), 1, Integer::sum);
@@ -65,6 +70,35 @@ public class DefaultModuleValidator implements ModuleValidator {
                 ModuleValidationCode.REQUIRED_FIELD_MISSING,
                 "$.moduleType",
                 "Required field is missing: moduleType"
+            ));
+        }
+        if (metadata.capabilities() == null) {
+            issues.add(issue(
+                ModuleValidationCode.REQUIRED_FIELD_MISSING,
+                "$.capabilities",
+                "Required field is missing: capabilities"
+            ));
+        } else {
+            if (metadata.capabilities().providedCapabilities() == null) {
+                issues.add(issue(
+                    ModuleValidationCode.REQUIRED_FIELD_MISSING,
+                    "$.providedCapabilities",
+                    "Required field is missing: providedCapabilities"
+                ));
+            }
+            if (metadata.capabilities().requiredCapabilities() == null) {
+                issues.add(issue(
+                    ModuleValidationCode.REQUIRED_FIELD_MISSING,
+                    "$.requiredCapabilities",
+                    "Required field is missing: requiredCapabilities"
+                ));
+            }
+        }
+        if (metadata.failurePolicy() == null) {
+            issues.add(issue(
+                ModuleValidationCode.REQUIRED_FIELD_MISSING,
+                "$.failurePolicy",
+                "Required field is missing: failurePolicy"
             ));
         }
     }
@@ -114,13 +148,87 @@ public class DefaultModuleValidator implements ModuleValidator {
     }
 
     private static void validateContractSemantics(ModuleMetadata metadata, List<ModuleValidationIssue> issues) {
-        if (metadata.capabilities().providedCapabilities().isEmpty()) {
+        if (metadata.capabilities() == null) {
+            return;
+        }
+        if (metadata.capabilities().providedCapabilities() == null || metadata.capabilities().providedCapabilities().isEmpty()) {
             issues.add(issue(
                 ModuleValidationCode.REQUIRED_FIELD_MISSING,
                 "$.providedCapabilities",
                 "providedCapabilities must contain at least one capability"
             ));
         }
+        validateCapabilities(metadata, issues);
+    }
+
+    private static void validateCapabilities(ModuleMetadata metadata, List<ModuleValidationIssue> issues) {
+        List<String> provided = metadata.capabilities().providedCapabilities();
+        List<String> required = metadata.capabilities().requiredCapabilities();
+        List<String> optional = metadata.capabilities().optionalCapabilities();
+
+        validateCapabilityList(provided, "$.providedCapabilities", issues);
+        validateCapabilityList(required, "$.requiredCapabilities", issues);
+        validateCapabilityList(optional, "$.optionalCapabilities", issues);
+
+        ensureDisjoint(provided, required, "$.providedCapabilities", "$.requiredCapabilities", issues);
+        ensureDisjoint(required, optional, "$.requiredCapabilities", "$.optionalCapabilities", issues);
+    }
+
+    private static void validateCapabilityList(List<String> capabilities, String fieldPath, List<ModuleValidationIssue> issues) {
+        if (capabilities == null) {
+            return;
+        }
+
+        Set<String> seen = new LinkedHashSet<>();
+        for (int i = 0; i < capabilities.size(); i++) {
+            String capability = capabilities.get(i);
+            String itemPath = fieldPath + "[" + i + "]";
+
+            if (isBlank(capability)) {
+                issues.add(capabilityIssue(itemPath, "Capability must not be blank"));
+                continue;
+            }
+
+            String trimmed = capability.trim();
+            if (!CAPABILITY_PATTERN.matcher(trimmed).matches()) {
+                issues.add(capabilityIssue(itemPath, "Capability id must match ^[a-z][a-z0-9.:-]{2,127}$"));
+            }
+
+            if (!seen.add(trimmed)) {
+                issues.add(capabilityIssue(itemPath, "Duplicate capability id detected: " + trimmed));
+            }
+        }
+    }
+
+    private static void ensureDisjoint(
+        List<String> left,
+        List<String> right,
+        String leftPath,
+        String rightPath,
+        List<ModuleValidationIssue> issues
+    ) {
+        if (left == null || right == null) {
+            return;
+        }
+        Set<String> leftValues = normalizeCapabilities(left);
+        Set<String> rightValues = normalizeCapabilities(right);
+        leftValues.retainAll(rightValues);
+        if (!leftValues.isEmpty()) {
+            issues.add(capabilityIssue(
+                leftPath,
+                "Capabilities must be disjoint between " + leftPath + " and " + rightPath + ", overlap=" + leftValues
+            ));
+        }
+    }
+
+    private static Set<String> normalizeCapabilities(List<String> capabilities) {
+        Set<String> normalized = new LinkedHashSet<>();
+        for (String capability : capabilities) {
+            if (!isBlank(capability)) {
+                normalized.add(capability.trim());
+            }
+        }
+        return normalized;
     }
 
     private static void validateDuplicateModuleId(
@@ -145,16 +253,29 @@ public class DefaultModuleValidator implements ModuleValidator {
         String runningKernelApiVersion,
         List<ModuleValidationIssue> issues
     ) {
-        if (isBlank(metadata.requiredKernelApiVersion()) || isBlank(runningKernelApiVersion)) {
+        if (isBlank(metadata.requiredKernelApiVersion())) {
             return;
         }
         if (!isKernelVersionCompatible(metadata.requiredKernelApiVersion(), runningKernelApiVersion)) {
             issues.add(issue(
                 ModuleValidationCode.KERNEL_API_INCOMPATIBLE,
                 "$.requiredKernelApiVersion",
-                "requiredKernelApiVersion '" + metadata.requiredKernelApiVersion()
-                    + "' is incompatible with running kernel version '" + runningKernelApiVersion + "'"
+                "moduleId '" + metadata.moduleId()
+                    + "' declares requiredKernelApiVersion '" + metadata.requiredKernelApiVersion()
+                    + "' which is incompatible with running kernel API version '" + runningKernelApiVersion + "'"
             ));
+        }
+    }
+
+    private static void validateRunningKernelApiVersion(String runningKernelApiVersion) {
+        if (isBlank(runningKernelApiVersion)) {
+            throw new IllegalStateException("runningKernelApiVersion must not be blank for module compatibility checks");
+        }
+        String normalized = normalizeVersion(runningKernelApiVersion);
+        if (!SEMVER_PATTERN.matcher(normalized).matches()) {
+            throw new IllegalStateException(
+                "runningKernelApiVersion '" + runningKernelApiVersion + "' is not a valid semantic version"
+            );
         }
     }
 
@@ -170,6 +291,10 @@ public class DefaultModuleValidator implements ModuleValidator {
 
     private static ModuleValidationIssue issue(ModuleValidationCode code, String fieldPath, String message) {
         return new ModuleValidationIssue(ModuleValidationSeverity.ERROR, code, fieldPath, message);
+    }
+
+    private static ModuleValidationIssue capabilityIssue(String fieldPath, String message) {
+        return issue(ModuleValidationCode.CAPABILITY_DECLARATION_INVALID, fieldPath, message);
     }
 
     private static boolean isBlank(String value) {

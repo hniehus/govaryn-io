@@ -15,7 +15,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
         "govaryn.kernel.id=test-kernel",
-        "govaryn.kernel.environment=dev"
+        "govaryn.kernel.environment=dev",
+        "spring.application.version=1.2.0"
 })
 class HealthEndpointTest {
 

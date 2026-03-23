@@ -10,6 +10,7 @@ import io.govaryn.kernel.module.ModuleType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.Assumptions;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -17,6 +18,7 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.IOException;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -125,6 +127,50 @@ class DefaultModuleDiscoveryServiceTest {
         assertTrue(output.getOut().contains("Skipping invalid module manifest"));
         assertTrue(output.getOut().contains(invalidManifest.toAbsolutePath().toString()));
         assertTrue(output.getOut().contains("Missing required field: moduleId"));
+    }
+
+    @Test
+    @DisplayName("Should ignore symlinked module manifest outside plugin directory")
+    void shouldIgnoreSymlinkedManifestOutsidePluginDirectory() throws IOException {
+        Path pluginDir = tempDir.resolve("plugins");
+        Path outsideDir = tempDir.resolve("outside");
+        Path pluginModuleDir = pluginDir.resolve("linked-module");
+        Files.createDirectories(pluginModuleDir);
+        Files.createDirectories(outsideDir);
+
+        Path outsideManifest = outsideDir.resolve("module.json");
+        Files.writeString(
+            outsideManifest,
+            """
+            {
+              "moduleContractVersion": "1.0.0",
+              "moduleId": "outside-module",
+              "moduleName": "Outside Module",
+              "moduleVersion": "1.0.0",
+              "requiredKernelApiVersion": "^1.0.0",
+              "moduleType": "feature",
+              "entryPoint": "io.govaryn.plugins.outside.OutsideModule"
+            }
+            """
+        );
+        try {
+            Files.createSymbolicLink(pluginModuleDir.resolve("module.json"), outsideManifest);
+        } catch (UnsupportedOperationException | FileSystemException ex) {
+            Assumptions.abort("Symbolic links are not supported in this test environment");
+        }
+
+        GovarynKernelProperties properties = baseProperties();
+        properties.setModuleMode(ModuleMode.PLUGIN_FOLDER);
+        properties.setModulePluginDirectory(pluginDir.toString());
+
+        DefaultModuleDiscoveryService discoveryService = new DefaultModuleDiscoveryService(
+            providerFor(),
+            properties
+        );
+
+        List<ModuleDiscoveryCandidate> candidates = discoveryService.discover();
+
+        assertTrue(candidates.isEmpty());
     }
 
     private static GovarynKernelProperties baseProperties() {

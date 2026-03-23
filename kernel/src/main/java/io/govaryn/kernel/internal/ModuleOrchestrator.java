@@ -3,6 +3,8 @@ package io.govaryn.kernel.internal;
 import io.govaryn.kernel.api.KernelContext;
 import io.govaryn.kernel.api.KernelModule;
 import io.govaryn.kernel.config.GovarynKernelProperties;
+import io.govaryn.kernel.config.ModuleFailurePolicyAction;
+import io.govaryn.kernel.module.ModuleFailureDetails;
 import io.govaryn.kernel.module.ModuleLifecycleState;
 import io.govaryn.kernel.module.ModuleRegistry;
 import io.govaryn.kernel.module.ModuleRegistryEntry;
@@ -28,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -73,13 +76,13 @@ public class ModuleOrchestrator implements ApplicationRunner {
         for (ModuleDiscoveryCandidate candidate : candidates) {
             log.info(
                 "event=module_discovered moduleId={} moduleName={} moduleVersion={} requiredKernelApiVersion={} currentModuleStatus={} source={} origin={} loadable={}",
-                candidate.metadata().moduleId(),
-                candidate.metadata().moduleName(),
-                candidate.metadata().moduleVersion(),
-                candidate.metadata().requiredKernelApiVersion(),
-                currentModuleStatus(candidate.metadata().moduleId()),
+                sanitizeForLog(candidate.metadata().moduleId()),
+                sanitizeForLog(candidate.metadata().moduleName()),
+                sanitizeForLog(candidate.metadata().moduleVersion()),
+                sanitizeForLog(candidate.metadata().requiredKernelApiVersion()),
+                sanitizeForLog(currentModuleStatus(candidate.metadata().moduleId())),
                 candidate.source(),
-                candidate.origin(),
+                sanitizeForLog(candidate.origin()),
                 candidate.loadableInCurrentRuntime()
             );
         }
@@ -91,21 +94,21 @@ public class ModuleOrchestrator implements ApplicationRunner {
 
         Map<String, ModuleDiscoveryCandidate> candidatesById = new LinkedHashMap<>();
         for (ModuleDiscoveryCandidate candidate : candidates) {
-            candidatesById.put(candidate.metadata().moduleId(), candidate);
+            candidatesById.put(reportKey(candidate.metadata().moduleId(), candidate.source(), candidate.origin()), candidate);
         }
 
         for (ModuleValidationReport report : reports) {
-            ModuleDiscoveryCandidate candidate = candidatesById.get(report.moduleId());
+            ModuleDiscoveryCandidate candidate = candidatesById.get(reportKey(report.moduleId(), report.source(), report.origin()));
             String moduleVersion = candidate != null ? candidate.metadata().moduleVersion() : "unknown";
             String requiredKernelApiVersion = candidate != null ? candidate.metadata().requiredKernelApiVersion() : "unknown";
             String status = report.valid() ? "VALIDATED" : "REJECTED";
             log.info(
                 "event=module_validation_report moduleId={} moduleName={} moduleVersion={} requiredKernelApiVersion={} currentModuleStatus={} source={} valid={} issueCount={}",
-                report.moduleId(),
-                report.moduleName(),
-                moduleVersion,
-                requiredKernelApiVersion,
-                status,
+                sanitizeForLog(report.moduleId()),
+                sanitizeForLog(report.moduleName()),
+                sanitizeForLog(moduleVersion),
+                sanitizeForLog(requiredKernelApiVersion),
+                sanitizeForLog(status),
                 report.source(),
                 report.valid(),
                 report.issues().size()
@@ -113,21 +116,21 @@ public class ModuleOrchestrator implements ApplicationRunner {
             for (ModuleValidationIssue issue : report.issues()) {
                 log.warn(
                     "event=module_validation_issue moduleId={} moduleVersion={} requiredKernelApiVersion={} currentModuleStatus={} errorType={} errorCause={} severity={} field={}",
-                    report.moduleId(),
-                    moduleVersion,
-                    requiredKernelApiVersion,
-                    status,
+                    sanitizeForLog(report.moduleId()),
+                    sanitizeForLog(moduleVersion),
+                    sanitizeForLog(requiredKernelApiVersion),
+                    sanitizeForLog(status),
                     issue.code(),
-                    issue.message(),
+                    sanitizeForLog(issue.message()),
                     issue.severity(),
-                    issue.fieldPath()
+                    sanitizeForLog(issue.fieldPath())
                 );
             }
         }
 
-        Map<String, ModuleValidationReport> reportsByModuleId = reports.stream()
+        Map<String, ModuleValidationReport> reportsByCompositeKey = reports.stream()
             .collect(Collectors.toMap(
-                ModuleValidationReport::moduleId,
+                report -> reportKey(report.moduleId(), report.source(), report.origin()),
                 Function.identity(),
                 (first, ignored) -> first,
                 LinkedHashMap::new
@@ -135,9 +138,16 @@ public class ModuleOrchestrator implements ApplicationRunner {
 
         Map<String, ModuleDiscoveryCandidate> validCandidatesById = new LinkedHashMap<>();
         for (ModuleDiscoveryCandidate candidate : candidates) {
-            ModuleValidationReport report = reportsByModuleId.get(candidate.metadata().moduleId());
+            ModuleValidationReport report = reportsByCompositeKey.get(
+                reportKey(candidate.metadata().moduleId(), candidate.source(), candidate.origin())
+            );
             if (report == null) {
-                log.warn("Missing validation report for moduleId={}; candidate is treated as invalid", candidate.metadata().moduleId());
+                log.warn(
+                    "Missing validation report for moduleId={} source={} origin={}; candidate is treated as invalid",
+                    sanitizeForLog(candidate.metadata().moduleId()),
+                    candidate.source(),
+                    sanitizeForLog(candidate.origin())
+                );
                 continue;
             }
             if (report.valid()) {
@@ -149,12 +159,12 @@ public class ModuleOrchestrator implements ApplicationRunner {
             moduleRegistry.registerValidated(validCandidate.metadata(), false, validCandidate.origin());
             log.info(
                 "event=module_registered moduleId={} moduleName={} moduleVersion={} requiredKernelApiVersion={} currentModuleStatus={} origin={}",
-                validCandidate.metadata().moduleId(),
-                validCandidate.metadata().moduleName(),
-                validCandidate.metadata().moduleVersion(),
-                validCandidate.metadata().requiredKernelApiVersion(),
-                currentModuleStatus(validCandidate.metadata().moduleId()),
-                validCandidate.origin()
+                sanitizeForLog(validCandidate.metadata().moduleId()),
+                sanitizeForLog(validCandidate.metadata().moduleName()),
+                sanitizeForLog(validCandidate.metadata().moduleVersion()),
+                sanitizeForLog(validCandidate.metadata().requiredKernelApiVersion()),
+                sanitizeForLog(currentModuleStatus(validCandidate.metadata().moduleId())),
+                sanitizeForLog(validCandidate.origin())
             );
         }
 
@@ -189,23 +199,28 @@ public class ModuleOrchestrator implements ApplicationRunner {
         for (KernelModule module : initializedModules) {
             log.info(
                 "event=module_starting moduleId={} moduleName={} moduleVersion={} requiredKernelApiVersion={} currentModuleStatus={}",
-                module.metadata().moduleId(),
-                module.metadata().moduleName(),
-                module.metadata().moduleVersion(),
-                module.metadata().requiredKernelApiVersion(),
-                currentModuleStatus(module.metadata().moduleId())
+                sanitizeForLog(module.metadata().moduleId()),
+                sanitizeForLog(module.metadata().moduleName()),
+                sanitizeForLog(module.metadata().moduleVersion()),
+                sanitizeForLog(module.metadata().requiredKernelApiVersion()),
+                sanitizeForLog(currentModuleStatus(module.metadata().moduleId()))
             );
-            module.start();
+            try {
+                module.start();
+            } catch (Exception ex) {
+                handleStartFailure(module, ex);
+            }
         }
 
+        List<ModuleRegistryEntry> registryEntries = moduleRegistry.findAll();
         int foundCount = candidates.size();
         int validatedCount = validCandidatesById.size();
         int rejectedCount = foundCount - validatedCount;
-        int registeredCount = moduleRegistry.findAll().size();
-        int failedCount = (int) moduleRegistry.findAll().stream()
+        int registeredCount = registryEntries.size();
+        int failedCount = (int) registryEntries.stream()
             .filter(entry -> entry.status().lifecycleState() == ModuleLifecycleState.FAILED)
             .count();
-        int degradedCount = (int) moduleRegistry.findAll().stream()
+        int degradedCount = (int) registryEntries.stream()
             .filter(entry -> entry.status().lifecycleState() == ModuleLifecycleState.DEGRADED || entry.status().degraded())
             .count();
 
@@ -225,5 +240,69 @@ public class ModuleOrchestrator implements ApplicationRunner {
     private String currentModuleStatus(String moduleId) {
         Optional<ModuleRegistryEntry> entry = moduleRegistry.findByModuleId(moduleId);
         return entry.map(value -> value.status().lifecycleState().name()).orElse("NOT_REGISTERED");
+    }
+
+    private void handleStartFailure(KernelModule module, Exception ex) {
+        String moduleId = module.metadata().moduleId();
+        ModuleFailureDetails failureDetails = new ModuleFailureDetails(
+            "START_FAILED",
+            ex.getClass().getSimpleName() + ": " + sanitizeForLog(ex.getMessage())
+        );
+        ModuleFailurePolicyAction policy = properties.getModuleInitializationFailurePolicy();
+        try {
+            if (policy == ModuleFailurePolicyAction.MARK_MODULE_DEGRADED) {
+                moduleRegistry.markDegraded(moduleId, failureDetails);
+            } else {
+                moduleRegistry.transitionState(moduleId, ModuleLifecycleState.FAILED, failureDetails);
+            }
+        } catch (Exception transitionError) {
+            log.warn(
+                "event=module_start_transition_failed moduleId={} currentModuleStatus={} errorType={} errorCause={}",
+                sanitizeForLog(moduleId),
+                sanitizeForLog(currentModuleStatus(moduleId)),
+                transitionError.getClass().getSimpleName(),
+                sanitizeForLog(transitionError.getMessage())
+            );
+        }
+
+        log.error(
+            "event=module_start_failed moduleId={} moduleName={} currentModuleStatus={} policy={} errorType={} errorCause={}",
+            sanitizeForLog(moduleId),
+            sanitizeForLog(module.metadata().moduleName()),
+            sanitizeForLog(currentModuleStatus(moduleId)),
+            policy,
+            ex.getClass().getSimpleName(),
+            sanitizeForLog(ex.getMessage()),
+            ex
+        );
+
+        if (policy == ModuleFailurePolicyAction.FAIL_FAST) {
+            throw new IllegalStateException(
+                "Module start failed and policy is FAIL_FAST: id=" + moduleId + " name=" + module.metadata().moduleName(),
+                ex
+            );
+        }
+    }
+
+    private static String reportKey(String moduleId, Object source, String origin) {
+        return String.join("|",
+            sanitizeForKey(moduleId),
+            sanitizeForKey(Objects.toString(source, "unknown")),
+            sanitizeForKey(origin)
+        );
+    }
+
+    private static String sanitizeForKey(String value) {
+        if (value == null) {
+            return "null";
+        }
+        return value.replace("|", "\\|").trim();
+    }
+
+    private static String sanitizeForLog(String value) {
+        if (value == null) {
+            return "null";
+        }
+        return value.replaceAll("[\\r\\n\\t\\x00-\\x1F]", " ").trim();
     }
 }

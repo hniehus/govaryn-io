@@ -104,8 +104,8 @@ class DefaultModuleValidatorTest {
             null,
             null,
             null,
-            List.of(),
-            List.of(),
+            io.govaryn.kernel.module.ModuleCapabilities.empty(),
+            io.govaryn.kernel.module.ModuleFailurePolicy.defaults(),
             null,
             List.of()
         );

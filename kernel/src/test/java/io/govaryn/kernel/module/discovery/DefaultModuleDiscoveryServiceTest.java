@@ -12,6 +12,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -21,6 +24,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("DefaultModuleDiscoveryService Tests")
+@ExtendWith(OutputCaptureExtension.class)
 class DefaultModuleDiscoveryServiceTest {
 
     @TempDir
@@ -84,6 +88,43 @@ class DefaultModuleDiscoveryServiceTest {
         assertFalse(candidate.loadableInCurrentRuntime());
         assertEquals("plugin-audit", candidate.metadata().moduleId());
         assertEquals("Plugin Audit Module", candidate.metadata().moduleName());
+    }
+
+    @Test
+    @DisplayName("Should log cause for invalid plugin manifest and skip candidate")
+    void shouldLogCauseForInvalidPluginManifest(CapturedOutput output) throws IOException {
+        Path pluginDir = tempDir.resolve("plugins");
+        Files.createDirectories(pluginDir.resolve("broken-module"));
+        Path invalidManifest = pluginDir.resolve("broken-module").resolve("module.json");
+        Files.writeString(
+            invalidManifest,
+            """
+            {
+              "moduleContractVersion": "1.0.0",
+              "moduleName": "Broken Module",
+              "moduleVersion": "1.1.0",
+              "requiredKernelApiVersion": "^1.0.0",
+              "moduleType": "feature",
+              "entryPoint": "io.govaryn.plugins.broken.BrokenModule"
+            }
+            """
+        );
+
+        GovarynKernelProperties properties = baseProperties();
+        properties.setModuleMode(ModuleMode.PLUGIN_FOLDER);
+        properties.setModulePluginDirectory(pluginDir.toString());
+
+        DefaultModuleDiscoveryService discoveryService = new DefaultModuleDiscoveryService(
+            providerFor(),
+            properties
+        );
+
+        List<ModuleDiscoveryCandidate> candidates = discoveryService.discover();
+
+        assertTrue(candidates.isEmpty());
+        assertTrue(output.getOut().contains("Skipping invalid module manifest"));
+        assertTrue(output.getOut().contains(invalidManifest.toAbsolutePath().toString()));
+        assertTrue(output.getOut().contains("Missing required field: moduleId"));
     }
 
     private static GovarynKernelProperties baseProperties() {

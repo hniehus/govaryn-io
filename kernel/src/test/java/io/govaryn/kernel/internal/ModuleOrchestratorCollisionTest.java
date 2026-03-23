@@ -70,6 +70,7 @@ class ModuleOrchestratorCollisionTest {
                 c.metadata().moduleId(),
                 c.metadata().moduleName(),
                 c.source(),
+                c.origin(),
                 true,
                 List.of()
             ))

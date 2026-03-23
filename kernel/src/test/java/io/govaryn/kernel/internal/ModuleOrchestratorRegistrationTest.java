@@ -74,6 +74,7 @@ class ModuleOrchestratorRegistrationTest {
                 "valid-module",
                 "Valid Module",
                 ModuleDiscoverySource.CLASSPATH,
+                "io.govaryn.modules.ValidModule",
                 true,
                 List.of()
             ),
@@ -81,6 +82,7 @@ class ModuleOrchestratorRegistrationTest {
                 "invalid-module",
                 "Invalid Module",
                 ModuleDiscoverySource.CLASSPATH,
+                "io.govaryn.modules.InvalidModule",
                 false,
                 List.of(new ModuleValidationIssue(
                     ModuleValidationSeverity.ERROR,

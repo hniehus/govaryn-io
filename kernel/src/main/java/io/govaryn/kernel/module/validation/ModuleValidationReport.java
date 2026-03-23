@@ -9,11 +9,13 @@ public record ModuleValidationReport(
     String moduleId,
     String moduleName,
     ModuleDiscoverySource source,
+    String origin,
     boolean valid,
     List<ModuleValidationIssue> issues
 ) {
     public ModuleValidationReport {
         Objects.requireNonNull(source, "source must not be null");
+        Objects.requireNonNull(origin, "origin must not be null");
         issues = issues == null ? List.of() : List.copyOf(issues);
     }
 }

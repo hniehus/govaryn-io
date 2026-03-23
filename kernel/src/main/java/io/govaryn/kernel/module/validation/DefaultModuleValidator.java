@@ -35,6 +35,7 @@ public class DefaultModuleValidator implements ModuleValidator {
             validateRequiredFields(metadata, issues);
             validateFormats(metadata, issues);
             validateContractVersion(metadata, issues);
+            validateContractSemantics(metadata, issues);
             validateDuplicateModuleId(metadata, moduleIdCounts, issues);
             validateKernelApiCompatibility(metadata, runningKernelApiVersion, issues);
 
@@ -43,6 +44,7 @@ public class DefaultModuleValidator implements ModuleValidator {
                 metadata.moduleId(),
                 metadata.moduleName(),
                 candidate.source(),
+                candidate.origin(),
                 valid,
                 issues
             ));
@@ -107,6 +109,16 @@ public class DefaultModuleValidator implements ModuleValidator {
                 ModuleValidationCode.CONTRACT_VERSION_UNSUPPORTED,
                 "$.moduleContractVersion",
                 "Unsupported moduleContractVersion: " + metadata.moduleContractVersion()
+            ));
+        }
+    }
+
+    private static void validateContractSemantics(ModuleMetadata metadata, List<ModuleValidationIssue> issues) {
+        if (metadata.capabilities().providedCapabilities().isEmpty()) {
+            issues.add(issue(
+                ModuleValidationCode.REQUIRED_FIELD_MISSING,
+                "$.providedCapabilities",
+                "providedCapabilities must contain at least one capability"
             ));
         }
     }

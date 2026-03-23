@@ -45,8 +45,8 @@ class ModuleMetadataContractTest {
                 null,
                 null,
                 "http://example.com",
-                List.of(),
-                List.of(),
+                ModuleCapabilities.empty(),
+                ModuleFailurePolicy.defaults(),
                 null,
                 List.of()
             )

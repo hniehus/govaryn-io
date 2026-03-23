@@ -16,8 +16,8 @@ public record ModuleMetadata(
     String author,
     String license,
     String homepage,
-    List<String> capabilities,
-    List<ModuleDependency> dependencies,
+    ModuleCapabilities capabilities,
+    ModuleFailurePolicy failurePolicy,
     String configSchemaRef,
     List<String> healthChecks
 ) {
@@ -42,8 +42,8 @@ public record ModuleMetadata(
             throw new IllegalArgumentException("homepage must start with https://");
         }
 
-        capabilities = capabilities == null ? List.of() : List.copyOf(capabilities);
-        dependencies = dependencies == null ? List.of() : List.copyOf(dependencies);
+        capabilities = capabilities == null ? ModuleCapabilities.empty() : capabilities;
+        failurePolicy = failurePolicy == null ? ModuleFailurePolicy.defaults() : failurePolicy;
         healthChecks = healthChecks == null ? List.of() : List.copyOf(healthChecks);
     }
 
@@ -67,8 +67,8 @@ public record ModuleMetadata(
             null,
             null,
             null,
-            List.of(),
-            List.of(),
+            new ModuleCapabilities(List.of("module.default"), List.of(), List.of()),
+            ModuleFailurePolicy.defaults(),
             null,
             List.of()
         );

@@ -29,4 +29,11 @@ class HealthEndpointTest {
                 .andExpect(status().isOk())
                 .andExpect(content().json("{\"status\":\"UP\"}"));
     }
+
+    @Test
+    void moduleStatusEndpointReturns200AndModulesArray() throws Exception {
+        mockMvc.perform(get("/modules/status"))
+            .andExpect(status().isOk())
+            .andExpect(content().json("{\"modules\":[]}"));
+    }
 }

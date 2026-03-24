@@ -11,11 +11,7 @@ public interface ModuleRegistry {
 
     void addDiscovered(ModuleMetadata metadata, boolean mandatory, String origin);
 
-    default void registerValidated(ModuleMetadata metadata, boolean mandatory, String origin) {
-        addDiscovered(metadata, mandatory, origin);
-        transitionState(metadata.moduleId(), ModuleLifecycleState.VALIDATED, null);
-        transitionState(metadata.moduleId(), ModuleLifecycleState.REGISTERED, null);
-    }
+    void registerValidated(ModuleMetadata metadata, boolean mandatory, String origin, String runningKernelApiVersion);
 
     Optional<ModuleRegistryEntry> findByModuleId(String moduleId);
 

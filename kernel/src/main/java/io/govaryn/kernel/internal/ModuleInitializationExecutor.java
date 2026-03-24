@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 
 @Component
 public class ModuleInitializationExecutor {
@@ -24,11 +25,12 @@ public class ModuleInitializationExecutor {
         List<KernelModule> modules,
         KernelContext context,
         ModuleRegistry registry,
-        ModuleFailurePolicyAction failurePolicy
+        Function<KernelModule, ModuleFailurePolicyAction> failurePolicyResolver
     ) {
         List<KernelModule> initializedModules = new ArrayList<>();
 
         for (KernelModule module : modules) {
+            ModuleFailurePolicyAction failurePolicy = failurePolicyResolver.apply(module);
             String moduleId = module.metadata().moduleId();
             String moduleVersion = module.metadata().moduleVersion();
             String requiredKernelApiVersion = module.metadata().requiredKernelApiVersion();
@@ -37,11 +39,11 @@ public class ModuleInitializationExecutor {
             if (registryEntry.isEmpty() || registryEntry.get().status().lifecycleState() != ModuleLifecycleState.REGISTERED) {
                 log.warn(
                     "event=module_initialization_skipped moduleId={} moduleName={} moduleVersion={} requiredKernelApiVersion={} currentModuleStatus={} errorType={} errorCause={}",
-                    moduleId,
-                    module.metadata().moduleName(),
-                    moduleVersion,
-                    requiredKernelApiVersion,
-                    registryEntry.map(entry -> entry.status().lifecycleState().name()).orElse("NOT_REGISTERED"),
+                    sanitizeForLog(moduleId),
+                    sanitizeForLog(module.metadata().moduleName()),
+                    sanitizeForLog(moduleVersion),
+                    sanitizeForLog(requiredKernelApiVersion),
+                    sanitizeForLog(registryEntry.map(entry -> entry.status().lifecycleState().name()).orElse("NOT_REGISTERED")),
                     "MODULE_NOT_REGISTERED",
                     "Module is not in REGISTERED state"
                 );
@@ -51,22 +53,22 @@ public class ModuleInitializationExecutor {
             try {
                 log.info(
                     "event=module_initialization_started moduleId={} moduleName={} moduleVersion={} requiredKernelApiVersion={} currentModuleStatus={}",
-                    moduleId,
-                    module.metadata().moduleName(),
-                    moduleVersion,
-                    requiredKernelApiVersion,
-                    registryEntry.get().status().lifecycleState().name()
+                    sanitizeForLog(moduleId),
+                    sanitizeForLog(module.metadata().moduleName()),
+                    sanitizeForLog(moduleVersion),
+                    sanitizeForLog(requiredKernelApiVersion),
+                    sanitizeForLog(registryEntry.get().status().lifecycleState().name())
                 );
                 registry.transitionState(moduleId, ModuleLifecycleState.INITIALIZING, null);
                 module.initialize(context);
                 registry.transitionState(moduleId, ModuleLifecycleState.INITIALIZED, null);
                 log.info(
                     "event=module_initialization_succeeded moduleId={} moduleName={} moduleVersion={} requiredKernelApiVersion={} currentModuleStatus={}",
-                    moduleId,
-                    module.metadata().moduleName(),
-                    moduleVersion,
-                    requiredKernelApiVersion,
-                    state(registry, moduleId)
+                    sanitizeForLog(moduleId),
+                    sanitizeForLog(module.metadata().moduleName()),
+                    sanitizeForLog(moduleVersion),
+                    sanitizeForLog(requiredKernelApiVersion),
+                    sanitizeForLog(state(registry, moduleId))
                 );
                 initializedModules.add(module);
             } catch (Exception ex) {
@@ -85,7 +87,7 @@ public class ModuleInitializationExecutor {
     ) {
         String moduleId = module.metadata().moduleId();
         String moduleName = module.metadata().moduleName();
-        String failureMessage = ex.getClass().getSimpleName() + ": " + ex.getMessage();
+        String failureMessage = ex.getClass().getSimpleName() + ": " + sanitizeForLog(ex.getMessage());
         ModuleFailureDetails failure = new ModuleFailureDetails("INITIALIZATION_FAILED", failureMessage);
 
         if (failurePolicy == ModuleFailurePolicyAction.MARK_MODULE_DEGRADED) {
@@ -96,14 +98,14 @@ public class ModuleInitializationExecutor {
 
         log.error(
             "event=module_initialization_failed moduleId={} moduleName={} moduleVersion={} requiredKernelApiVersion={} currentModuleStatus={} policy={} errorType={} errorCause={}",
-            moduleId,
-            moduleName,
-            module.metadata().moduleVersion(),
-            module.metadata().requiredKernelApiVersion(),
-            state(registry, moduleId),
+            sanitizeForLog(moduleId),
+            sanitizeForLog(moduleName),
+            sanitizeForLog(module.metadata().moduleVersion()),
+            sanitizeForLog(module.metadata().requiredKernelApiVersion()),
+            sanitizeForLog(state(registry, moduleId)),
             failurePolicy,
             ex.getClass().getSimpleName(),
-            ex.getMessage(),
+            sanitizeForLog(ex.getMessage()),
             ex
         );
 
@@ -135,10 +137,10 @@ public class ModuleInitializationExecutor {
         } catch (Exception transitionError) {
             log.warn(
                 "event=module_transition_failed moduleId={} currentModuleStatus={} errorType={} errorCause={}",
-                moduleId,
-                state(registry, moduleId),
+                sanitizeForLog(moduleId),
+                sanitizeForLog(state(registry, moduleId)),
                 transitionError.getClass().getSimpleName(),
-                transitionError.getMessage()
+                sanitizeForLog(transitionError.getMessage())
             );
         }
     }
@@ -149,10 +151,10 @@ public class ModuleInitializationExecutor {
         } catch (Exception markError) {
             log.warn(
                 "event=module_mark_degraded_failed moduleId={} currentModuleStatus={} errorType={} errorCause={}",
-                moduleId,
-                state(registry, moduleId),
+                sanitizeForLog(moduleId),
+                sanitizeForLog(state(registry, moduleId)),
                 markError.getClass().getSimpleName(),
-                markError.getMessage()
+                sanitizeForLog(markError.getMessage())
             );
         }
     }
@@ -161,5 +163,12 @@ public class ModuleInitializationExecutor {
         return registry.findByModuleId(moduleId)
             .map(entry -> entry.status().lifecycleState().name())
             .orElse("NOT_REGISTERED");
+    }
+
+    private static String sanitizeForLog(String value) {
+        if (value == null) {
+            return "null";
+        }
+        return value.replaceAll("[\\r\\n\\t\\x00-\\x1F]", " ").trim();
     }
 }

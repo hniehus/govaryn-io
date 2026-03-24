@@ -10,6 +10,7 @@ import io.govaryn.kernel.module.ModuleType;
 import io.govaryn.kernel.module.discovery.ModuleDiscoveryCandidate;
 import io.govaryn.kernel.module.discovery.ModuleDiscoveryService;
 import io.govaryn.kernel.module.discovery.ModuleDiscoverySource;
+import io.govaryn.kernel.module.graph.ModuleDependencyGraphValidator;
 import io.govaryn.kernel.module.identity.ModuleIdentityCollisionDetector;
 import io.govaryn.kernel.module.validation.ModuleValidationReport;
 import io.govaryn.kernel.module.validation.ModuleValidator;
@@ -83,6 +84,7 @@ class ModuleOrchestratorCollisionTest {
             moduleValidator,
             new InMemoryModuleRegistry(),
             new ModuleIdentityCollisionDetector(),
+            new ModuleDependencyGraphValidator(),
             new ModuleInitializationExecutor(),
             "1.2.0"
         );

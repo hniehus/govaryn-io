@@ -63,7 +63,8 @@ class ModuleIdentityCollisionDetectorTest {
                 "io.govaryn.modules.AuditModule"
             ),
             true,
-            "classpath:AuditModule"
+            "classpath:AuditModule",
+            "1.2.0"
         );
 
         ModuleDiscoveryCandidate candidate = candidate(

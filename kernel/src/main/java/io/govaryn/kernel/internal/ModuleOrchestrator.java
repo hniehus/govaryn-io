@@ -5,11 +5,14 @@ import io.govaryn.kernel.api.KernelModule;
 import io.govaryn.kernel.config.GovarynKernelProperties;
 import io.govaryn.kernel.config.ModuleFailurePolicyAction;
 import io.govaryn.kernel.module.ModuleFailureDetails;
+import io.govaryn.kernel.module.ModuleFailurePolicy;
 import io.govaryn.kernel.module.ModuleLifecycleState;
 import io.govaryn.kernel.module.ModuleRegistry;
 import io.govaryn.kernel.module.ModuleRegistryEntry;
 import io.govaryn.kernel.module.discovery.ModuleDiscoveryCandidate;
 import io.govaryn.kernel.module.discovery.ModuleDiscoveryService;
+import io.govaryn.kernel.module.graph.ModuleDependencyGraph;
+import io.govaryn.kernel.module.graph.ModuleDependencyGraphValidator;
 import io.govaryn.kernel.module.identity.ModuleIdentityCollision;
 import io.govaryn.kernel.module.identity.ModuleIdentityCollisionDetector;
 import io.govaryn.kernel.module.validation.ModuleValidationIssue;
@@ -46,6 +49,7 @@ public class ModuleOrchestrator implements ApplicationRunner {
     private final ModuleValidator moduleValidator;
     private final ModuleRegistry moduleRegistry;
     private final ModuleIdentityCollisionDetector collisionDetector;
+    private final ModuleDependencyGraphValidator dependencyGraphValidator;
     private final ModuleInitializationExecutor initializationExecutor;
 
     public ModuleOrchestrator(ObjectProvider<KernelModule> modules,
@@ -54,6 +58,7 @@ public class ModuleOrchestrator implements ApplicationRunner {
                               ModuleValidator moduleValidator,
                               ModuleRegistry moduleRegistry,
                               ModuleIdentityCollisionDetector collisionDetector,
+                              ModuleDependencyGraphValidator dependencyGraphValidator,
                               ModuleInitializationExecutor initializationExecutor,
                               @Value("${spring.application.version:${project.version:unknown}}") String kernelVersion) {
         this.modules = modules.orderedStream().sorted(Comparator.comparingInt(KernelModule::order)).toList();
@@ -62,6 +67,7 @@ public class ModuleOrchestrator implements ApplicationRunner {
         this.moduleValidator = moduleValidator;
         this.moduleRegistry = moduleRegistry;
         this.collisionDetector = collisionDetector;
+        this.dependencyGraphValidator = dependencyGraphValidator;
         this.initializationExecutor = initializationExecutor;
         this.kernelVersion = kernelVersion;
     }
@@ -157,8 +163,20 @@ public class ModuleOrchestrator implements ApplicationRunner {
             }
         }
 
+        ModuleDependencyGraphValidator.ModuleDependencyGraphValidation dependencyGraphValidation =
+            dependencyGraphValidator.validateGraph(List.copyOf(validCandidatesById.values()));
+        if (!dependencyGraphValidation.unresolvedRequiredCapabilitiesByModuleId().isEmpty()) {
+            throw new IllegalStateException(
+                "Unresolved required capabilities detected: "
+                    + dependencyGraphValidation.unresolvedRequiredCapabilitiesByModuleId()
+            );
+        }
+
+        ModuleDependencyGraph dependencyGraph = dependencyGraphValidation.graph();
+        dependencyGraphValidator.assertAcyclic(dependencyGraph);
+
         for (ModuleDiscoveryCandidate validCandidate : validCandidatesById.values()) {
-            moduleRegistry.registerValidated(validCandidate.metadata(), false, validCandidate.origin());
+            moduleRegistry.registerValidated(validCandidate.metadata(), false, validCandidate.origin(), kernelVersion);
             log.info(
                 "event=module_registered moduleId={} moduleName={} moduleVersion={} requiredKernelApiVersion={} currentModuleStatus={} origin={}",
                 sanitizeForLog(validCandidate.metadata().moduleId()),
@@ -195,7 +213,7 @@ public class ModuleOrchestrator implements ApplicationRunner {
             modulesToStart,
             context,
             moduleRegistry,
-            properties.getModuleInitializationFailurePolicy()
+            this::resolveInitializationFailurePolicy
         );
 
         for (KernelModule module : initializedModules) {
@@ -210,7 +228,7 @@ public class ModuleOrchestrator implements ApplicationRunner {
             try {
                 module.start();
             } catch (Exception ex) {
-                handleStartFailure(module, ex);
+                handleStartFailure(module, resolveRuntimeFailurePolicy(module), ex);
             }
         }
 
@@ -244,13 +262,12 @@ public class ModuleOrchestrator implements ApplicationRunner {
         return entry.map(value -> value.status().lifecycleState().name()).orElse("NOT_REGISTERED");
     }
 
-    private void handleStartFailure(KernelModule module, Exception ex) {
+    private void handleStartFailure(KernelModule module, ModuleFailurePolicyAction policy, Exception ex) {
         String moduleId = module.metadata().moduleId();
         ModuleFailureDetails failureDetails = new ModuleFailureDetails(
             "START_FAILED",
             ex.getClass().getSimpleName() + ": " + sanitizeForLog(ex.getMessage())
         );
-        ModuleFailurePolicyAction policy = properties.getModuleInitializationFailurePolicy();
         try {
             if (policy == ModuleFailurePolicyAction.MARK_MODULE_DEGRADED) {
                 moduleRegistry.markDegraded(moduleId, failureDetails);
@@ -268,9 +285,11 @@ public class ModuleOrchestrator implements ApplicationRunner {
         }
 
         log.error(
-            "event=module_start_failed moduleId={} moduleName={} currentModuleStatus={} policy={} errorType={} errorCause={}",
+            "event=module_start_failed moduleId={} moduleName={} moduleVersion={} requiredKernelApiVersion={} currentModuleStatus={} policy={} errorType={} errorCause={}",
             sanitizeForLog(moduleId),
             sanitizeForLog(module.metadata().moduleName()),
+            sanitizeForLog(module.metadata().moduleVersion()),
+            sanitizeForLog(module.metadata().requiredKernelApiVersion()),
             sanitizeForLog(currentModuleStatus(moduleId)),
             policy,
             ex.getClass().getSimpleName(),
@@ -284,6 +303,26 @@ public class ModuleOrchestrator implements ApplicationRunner {
                 ex
             );
         }
+    }
+
+    private ModuleFailurePolicyAction resolveInitializationFailurePolicy(KernelModule module) {
+        ModuleFailurePolicy modulePolicy = module.metadata().failurePolicy();
+        ModuleFailurePolicy defaults = ModuleFailurePolicy.defaults();
+        ModuleFailurePolicyAction moduleAction = modulePolicy.onInitializationFailure();
+
+        if (moduleAction != defaults.onInitializationFailure()) {
+            return moduleAction;
+        }
+        return properties.getModuleInitializationFailurePolicy();
+    }
+
+    private ModuleFailurePolicyAction resolveRuntimeFailurePolicy(KernelModule module) {
+        ModuleFailurePolicy modulePolicy = module.metadata().failurePolicy();
+        ModuleFailurePolicy defaults = ModuleFailurePolicy.defaults();
+        if (modulePolicy.onRuntimeFailure() != defaults.onRuntimeFailure()) {
+            return modulePolicy.onRuntimeFailure();
+        }
+        return properties.getModuleInitializationFailurePolicy();
     }
 
     private static String reportKey(String moduleId, Object source, String origin) {

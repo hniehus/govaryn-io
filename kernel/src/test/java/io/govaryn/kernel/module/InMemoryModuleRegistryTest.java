@@ -45,7 +45,7 @@ class InMemoryModuleRegistryTest {
             "io.govaryn.modules.billing.BillingModule"
         );
 
-        registry.registerValidated(metadata, true, "classpath:BillingModule");
+        registry.registerValidated(metadata, true, "classpath:BillingModule", "1.2.0");
 
         ModuleRegistryEntry entry = registry.findByModuleId("billing").orElseThrow();
         assertEquals(ModuleLifecycleState.REGISTERED, entry.status().lifecycleState());
@@ -75,6 +75,29 @@ class InMemoryModuleRegistryTest {
         assertTrue(ex.getMessage().contains("Duplicate moduleId"));
         assertTrue(ex.getMessage().contains("existing"));
         assertTrue(ex.getMessage().contains("incoming"));
+    }
+
+    @Test
+    @DisplayName("Should reject registration of incompatible module")
+    void shouldRejectIncompatibleModuleRegistration() {
+        InMemoryModuleRegistry registry = new InMemoryModuleRegistry();
+        ModuleMetadata metadata = ModuleMetadata.minimal(
+            "incompatible-module",
+            "IncompatibleModule",
+            "1.0.0",
+            "^2.0.0",
+            ModuleType.FEATURE,
+            "io.govaryn.modules.incompatible.IncompatibleModule"
+        );
+
+        IllegalStateException ex = assertThrows(
+            IllegalStateException.class,
+            () -> registry.registerValidated(metadata, false, "classpath:IncompatibleModule", "1.2.0")
+        );
+        assertTrue(ex.getMessage().contains("incompatible-module"));
+        assertTrue(ex.getMessage().contains("^2.0.0"));
+        assertTrue(ex.getMessage().contains("1.2.0"));
+        assertTrue(registry.findByModuleId("incompatible-module").isEmpty());
     }
 
     @Test

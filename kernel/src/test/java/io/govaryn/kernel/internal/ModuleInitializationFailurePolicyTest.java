@@ -13,25 +13,30 @@ import io.govaryn.kernel.module.ModuleType;
 import io.govaryn.kernel.module.discovery.ModuleDiscoveryCandidate;
 import io.govaryn.kernel.module.discovery.ModuleDiscoveryService;
 import io.govaryn.kernel.module.discovery.ModuleDiscoverySource;
+import io.govaryn.kernel.module.graph.ModuleDependencyGraphValidator;
 import io.govaryn.kernel.module.identity.ModuleIdentityCollisionDetector;
 import io.govaryn.kernel.module.validation.ModuleValidationReport;
 import io.govaryn.kernel.module.validation.ModuleValidator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.boot.DefaultApplicationArguments;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("Module Initialization Failure Policy Tests")
+@ExtendWith(OutputCaptureExtension.class)
 class ModuleInitializationFailurePolicyTest {
 
     @Test
     @DisplayName("Should continue startup when module fails during initialization and policy is REJECT_MODULE_CONTINUE")
-    void shouldContinueOnInitializationFailureWhenPolicyRejectContinue() {
+    void shouldContinueOnInitializationFailureWhenPolicyRejectContinue(CapturedOutput output) {
         TestKernelModule failing = new TestKernelModule("failing-module", true);
         TestKernelModule healthy = new TestKernelModule("healthy-module", false);
 
@@ -50,6 +55,7 @@ class ModuleInitializationFailurePolicyTest {
             validator,
             registry,
             new ModuleIdentityCollisionDetector(),
+            new ModuleDependencyGraphValidator(),
             new ModuleInitializationExecutor(),
             "1.2.0"
         );
@@ -60,11 +66,13 @@ class ModuleInitializationFailurePolicyTest {
         assertEquals(ModuleLifecycleState.INITIALIZED, registry.findByModuleId("healthy-module").orElseThrow().status().lifecycleState());
         assertFalse(failing.started);
         assertTrue(healthy.started);
+        assertTrue(output.getOut().contains("event=module_initialization_failed moduleId=failing-module"));
+        assertTrue(output.getOut().contains("policy=REJECT_MODULE_CONTINUE"));
     }
 
     @Test
     @DisplayName("Should fail fast when module fails during initialization and policy is FAIL_FAST")
-    void shouldFailFastOnInitializationFailure() {
+    void shouldFailFastOnInitializationFailure(CapturedOutput output) {
         TestKernelModule failing = new TestKernelModule("failing-module", true);
 
         GovarynKernelProperties properties = baseProperties(ModuleFailurePolicyAction.FAIL_FAST);
@@ -81,6 +89,7 @@ class ModuleInitializationFailurePolicyTest {
             validator,
             registry,
             new ModuleIdentityCollisionDetector(),
+            new ModuleDependencyGraphValidator(),
             new ModuleInitializationExecutor(),
             "1.2.0"
         );
@@ -92,11 +101,13 @@ class ModuleInitializationFailurePolicyTest {
 
         assertTrue(ex.getMessage().contains("FAIL_FAST"));
         assertEquals(ModuleLifecycleState.FAILED, registry.findByModuleId("failing-module").orElseThrow().status().lifecycleState());
+        assertTrue(output.getOut().contains("event=module_initialization_failed moduleId=failing-module"));
+        assertTrue(output.getOut().contains("policy=FAIL_FAST"));
     }
 
     @Test
     @DisplayName("Should mark module as degraded when initialization fails and policy is MARK_MODULE_DEGRADED")
-    void shouldMarkDegradedOnInitializationFailureWhenPolicyConfigured() {
+    void shouldMarkDegradedOnInitializationFailureWhenPolicyConfigured(CapturedOutput output) {
         TestKernelModule failing = new TestKernelModule("failing-module", true);
 
         GovarynKernelProperties properties = baseProperties(ModuleFailurePolicyAction.MARK_MODULE_DEGRADED);
@@ -113,6 +124,7 @@ class ModuleInitializationFailurePolicyTest {
             validator,
             registry,
             new ModuleIdentityCollisionDetector(),
+            new ModuleDependencyGraphValidator(),
             new ModuleInitializationExecutor(),
             "1.2.0"
         );
@@ -120,6 +132,8 @@ class ModuleInitializationFailurePolicyTest {
         assertDoesNotThrow(() -> orchestrator.run(new DefaultApplicationArguments(new String[0])));
         assertEquals(ModuleLifecycleState.DEGRADED, registry.findByModuleId("failing-module").orElseThrow().status().lifecycleState());
         assertTrue(registry.findByModuleId("failing-module").orElseThrow().status().degraded());
+        assertTrue(output.getOut().contains("event=module_initialization_failed moduleId=failing-module"));
+        assertTrue(output.getOut().contains("policy=MARK_MODULE_DEGRADED"));
     }
 
     private static GovarynKernelProperties baseProperties(ModuleFailurePolicyAction policy) {

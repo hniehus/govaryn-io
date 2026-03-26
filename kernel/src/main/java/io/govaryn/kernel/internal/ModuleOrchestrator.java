@@ -33,7 +33,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -41,6 +40,7 @@ import java.util.stream.Collectors;
 public class ModuleOrchestrator implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(ModuleOrchestrator.class);
+    private static final int LOG_FIELD_MAX_LENGTH = 512;
 
     private final List<KernelModule> modules;
     private final GovarynKernelProperties properties;
@@ -100,13 +100,13 @@ public class ModuleOrchestrator implements ApplicationRunner {
             throw new IllegalStateException(collisionDetector.formatCollisionMessage(collisions));
         }
 
-        Map<String, ModuleDiscoveryCandidate> candidatesById = new LinkedHashMap<>();
+        Map<DiscoveryKey, ModuleDiscoveryCandidate> candidatesById = new LinkedHashMap<>();
         for (ModuleDiscoveryCandidate candidate : candidates) {
-            candidatesById.put(reportKey(candidate.metadata().moduleId(), candidate.source(), candidate.origin()), candidate);
+            candidatesById.put(discoveryKey(candidate), candidate);
         }
 
         for (ModuleValidationReport report : reports) {
-            ModuleDiscoveryCandidate candidate = candidatesById.get(reportKey(report.moduleId(), report.source(), report.origin()));
+            ModuleDiscoveryCandidate candidate = candidatesById.get(discoveryKey(report));
             String moduleVersion = candidate != null ? candidate.metadata().moduleVersion() : "unknown";
             String requiredKernelApiVersion = candidate != null ? candidate.metadata().requiredKernelApiVersion() : "unknown";
             String status = report.valid() ? "VALIDATED" : "REJECTED";
@@ -136,9 +136,9 @@ public class ModuleOrchestrator implements ApplicationRunner {
             }
         }
 
-        Map<String, ModuleValidationReport> reportsByCompositeKey = reports.stream()
+        Map<DiscoveryKey, ModuleValidationReport> reportsByCompositeKey = reports.stream()
             .collect(Collectors.toMap(
-                report -> reportKey(report.moduleId(), report.source(), report.origin()),
+                ModuleOrchestrator::discoveryKey,
                 Function.identity(),
                 (first, ignored) -> first,
                 LinkedHashMap::new
@@ -147,7 +147,7 @@ public class ModuleOrchestrator implements ApplicationRunner {
         Map<String, ModuleDiscoveryCandidate> validCandidatesById = new LinkedHashMap<>();
         for (ModuleDiscoveryCandidate candidate : candidates) {
             ModuleValidationReport report = reportsByCompositeKey.get(
-                reportKey(candidate.metadata().moduleId(), candidate.source(), candidate.origin())
+                discoveryKey(candidate)
             );
             if (report == null) {
                 log.warn(
@@ -332,25 +332,37 @@ public class ModuleOrchestrator implements ApplicationRunner {
         return kernelFallbackAction;
     }
 
-    private static String reportKey(String moduleId, Object source, String origin) {
-        return String.join("|",
-            sanitizeForKey(moduleId),
-            sanitizeForKey(Objects.toString(source, "unknown")),
-            sanitizeForKey(origin)
+    private static DiscoveryKey discoveryKey(ModuleDiscoveryCandidate candidate) {
+        return new DiscoveryKey(
+            candidate.metadata().moduleId(),
+            candidate.source(),
+            candidate.origin()
         );
     }
 
-    private static String sanitizeForKey(String value) {
-        if (value == null) {
-            return "null";
-        }
-        return value.replace("|", "\\|").trim();
+    private static DiscoveryKey discoveryKey(ModuleValidationReport report) {
+        return new DiscoveryKey(
+            report.moduleId(),
+            report.source(),
+            report.origin()
+        );
     }
 
     private static String sanitizeForLog(String value) {
         if (value == null) {
             return "null";
         }
-        return value.replaceAll("[\\r\\n\\t\\x00-\\x1F]", " ").trim();
+        String sanitized = value.replaceAll("[\\r\\n\\t\\x00-\\x1F]", " ").trim();
+        if (sanitized.length() <= LOG_FIELD_MAX_LENGTH) {
+            return sanitized;
+        }
+        return sanitized.substring(0, LOG_FIELD_MAX_LENGTH) + "...";
+    }
+
+    private record DiscoveryKey(
+        String moduleId,
+        io.govaryn.kernel.module.discovery.ModuleDiscoverySource source,
+        String origin
+    ) {
     }
 }

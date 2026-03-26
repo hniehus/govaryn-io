@@ -7,6 +7,8 @@ This document provides ready-to-run module examples for development, testing, an
 | Scenario | Class | Profile |
 | --- | --- | --- |
 | Minimal valid module | `MinimalReferenceModule` | `module-example-minimal` |
+| Production-like reference module | `ReferenceFeatureModule` + `ReferencePlatformSupportModule` | `module-reference` |
+| Production-like reference module (controlled init failure path) | `ReferenceFeatureModule` + `ReferencePlatformSupportModule` | `module-reference-failing-init` |
 | Reusable module template (with required/provided capability examples) | `ModuleTemplateModule` + `ModuleTemplateSupportModule` | `module-template` |
 | Missing required field (`moduleName` blank) | `MissingRequiredFieldModule` | `module-example-missing-required-field` |
 | Incompatible kernel API version | `IncompatibleApiVersionModule` | `module-example-incompatible-api` |
@@ -34,6 +36,14 @@ Example (reusable module template):
 ```bash
 mvn -pl kernel spring-boot:run \
   -Dspring-boot.run.profiles=module-template \
+  -Dspring-boot.run.arguments="--spring.config.additional-location=optional:file:./config/"
+```
+
+Example (production-like reference module):
+
+```bash
+mvn -pl kernel spring-boot:run \
+  -Dspring-boot.run.profiles=module-reference \
   -Dspring-boot.run.arguments="--spring.config.additional-location=optional:file:./config/"
 ```
 

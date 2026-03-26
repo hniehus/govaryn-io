@@ -20,6 +20,7 @@ import java.util.function.Function;
 public class ModuleInitializationExecutor {
 
     private static final Logger log = LoggerFactory.getLogger(ModuleInitializationExecutor.class);
+    private static final int LOG_FIELD_MAX_LENGTH = 512;
 
     public List<KernelModule> initializeRegisteredModules(
         List<KernelModule> modules,
@@ -91,7 +92,10 @@ public class ModuleInitializationExecutor {
         ModuleFailureDetails failure = new ModuleFailureDetails("INITIALIZATION_FAILED", failureMessage);
 
         if (failurePolicy == ModuleFailurePolicyAction.MARK_MODULE_DEGRADED) {
-            safeMarkDegraded(moduleId, registry, failure);
+            boolean degraded = safeMarkDegraded(moduleId, registry, failure);
+            if (!degraded) {
+                safeTransitionToFailed(moduleId, registry, failure);
+            }
         } else {
             safeTransitionToFailed(moduleId, registry, failure);
         }
@@ -145,9 +149,10 @@ public class ModuleInitializationExecutor {
         }
     }
 
-    private void safeMarkDegraded(String moduleId, ModuleRegistry registry, ModuleFailureDetails failure) {
+    private boolean safeMarkDegraded(String moduleId, ModuleRegistry registry, ModuleFailureDetails failure) {
         try {
             registry.markDegraded(moduleId, failure);
+            return true;
         } catch (Exception markError) {
             log.warn(
                 "event=module_mark_degraded_failed moduleId={} currentModuleStatus={} errorType={} errorCause={}",
@@ -156,6 +161,7 @@ public class ModuleInitializationExecutor {
                 markError.getClass().getSimpleName(),
                 sanitizeForLog(markError.getMessage())
             );
+            return false;
         }
     }
 
@@ -169,6 +175,10 @@ public class ModuleInitializationExecutor {
         if (value == null) {
             return "null";
         }
-        return value.replaceAll("[\\r\\n\\t\\x00-\\x1F]", " ").trim();
+        String sanitized = value.replaceAll("[\\r\\n\\t\\x00-\\x1F]", " ").trim();
+        if (sanitized.length() <= LOG_FIELD_MAX_LENGTH) {
+            return sanitized;
+        }
+        return sanitized.substring(0, LOG_FIELD_MAX_LENGTH) + "...";
     }
 }

@@ -55,4 +55,22 @@ public class ReferenceModulesConfiguration {
     KernelModule moduleTemplateModule() {
         return new ModuleTemplateModule();
     }
+
+    @Bean
+    @Profile({"module-reference", "module-reference-failing-init"})
+    KernelModule referencePlatformSupportModule() {
+        return new ReferencePlatformSupportModule();
+    }
+
+    @Bean
+    @Profile("module-reference")
+    KernelModule referenceFeatureModule() {
+        return new ReferenceFeatureModule(false);
+    }
+
+    @Bean
+    @Profile("module-reference-failing-init")
+    KernelModule referenceFeatureModuleFailingInit() {
+        return new ReferenceFeatureModule(true);
+    }
 }

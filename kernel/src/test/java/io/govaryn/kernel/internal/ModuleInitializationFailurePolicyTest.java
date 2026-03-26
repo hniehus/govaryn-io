@@ -7,6 +7,7 @@ import io.govaryn.kernel.config.KernelEnvironment;
 import io.govaryn.kernel.config.ModuleFailurePolicyAction;
 import io.govaryn.kernel.config.ModuleMode;
 import io.govaryn.kernel.module.InMemoryModuleRegistry;
+import io.govaryn.kernel.module.ModuleFailureDetails;
 import io.govaryn.kernel.module.ModuleLifecycleState;
 import io.govaryn.kernel.module.ModuleMetadata;
 import io.govaryn.kernel.module.ModuleType;
@@ -134,6 +135,44 @@ class ModuleInitializationFailurePolicyTest {
         assertTrue(registry.findByModuleId("failing-module").orElseThrow().status().degraded());
         assertTrue(output.getOut().contains("event=module_initialization_failed moduleId=failing-module"));
         assertTrue(output.getOut().contains("policy=MARK_MODULE_DEGRADED"));
+    }
+
+    @Test
+    @DisplayName("Should fallback to FAILED when degraded transition fails during initialization error handling")
+    void shouldFallbackToFailedWhenMarkDegradedFails(CapturedOutput output) {
+        TestKernelModule failing = new TestKernelModule("failing-module", true);
+
+        GovarynKernelProperties properties = baseProperties(ModuleFailurePolicyAction.MARK_MODULE_DEGRADED);
+        ModuleDiscoveryService discoveryService = () -> List.of(
+            discoveryCandidate("failing-module", "io.govaryn.modules.FailingModule")
+        );
+        ModuleValidator validator = allValidValidator();
+        InMemoryModuleRegistry registry = new InMemoryModuleRegistry() {
+            @Override
+            public void markDegraded(String moduleId, ModuleFailureDetails errorDetails) {
+                throw new IllegalStateException("simulated degraded transition failure");
+            }
+        };
+
+        ModuleOrchestrator orchestrator = new ModuleOrchestrator(
+            providerFor(failing),
+            properties,
+            discoveryService,
+            validator,
+            registry,
+            new ModuleIdentityCollisionDetector(),
+            new ModuleDependencyGraphValidator(),
+            new ModuleInitializationExecutor(),
+            "1.2.0"
+        );
+
+        assertDoesNotThrow(() -> orchestrator.run(new DefaultApplicationArguments(new String[0])));
+        assertEquals(
+            ModuleLifecycleState.FAILED,
+            registry.findByModuleId("failing-module").orElseThrow().status().lifecycleState()
+        );
+        assertTrue(output.getOut().contains("event=module_mark_degraded_failed moduleId=failing-module"));
+        assertTrue(output.getOut().contains("event=module_initialization_failed moduleId=failing-module"));
     }
 
     private static GovarynKernelProperties baseProperties(ModuleFailurePolicyAction policy) {

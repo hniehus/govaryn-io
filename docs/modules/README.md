@@ -7,6 +7,8 @@ This section contains technical guidance for teams implementing kernel modules.
 - [Module Contract (Author View)](./MODULE_CONTRACT.md)
 - [How To Build a Conformant Module](./HOW_TO_BUILD_CONFORMANT_MODULE.md)
 - [Module Template Author Guide](./MODULE_TEMPLATE_AUTHOR_GUIDE.md)
+- [Module Governance and Change Rules](./MODULE_GOVERNANCE.md)
+- [Definition of Done](./DEFINITION_OF_DONE.md)
 - [Reference Module Scenario](./REFERENCE_MODULE_SCENARIO.md)
 - [Reference Modules and Negative Examples](./REFERENCE_MODULES.md)
 

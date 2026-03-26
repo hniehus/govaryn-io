@@ -308,21 +308,28 @@ public class ModuleOrchestrator implements ApplicationRunner {
     private ModuleFailurePolicyAction resolveInitializationFailurePolicy(KernelModule module) {
         ModuleFailurePolicy modulePolicy = module.metadata().failurePolicy();
         ModuleFailurePolicy defaults = ModuleFailurePolicy.defaults();
-        ModuleFailurePolicyAction moduleAction = modulePolicy.onInitializationFailure();
-
-        if (moduleAction != defaults.onInitializationFailure()) {
-            return moduleAction;
-        }
-        return properties.getModuleInitializationFailurePolicy();
+        return resolvePhasePolicy(
+            modulePolicy.onInitializationFailure(),
+            defaults.onInitializationFailure(),
+            properties.getModuleInitializationFailurePolicy()
+        );
     }
 
     private ModuleFailurePolicyAction resolveRuntimeFailurePolicy(KernelModule module) {
         ModuleFailurePolicy modulePolicy = module.metadata().failurePolicy();
-        ModuleFailurePolicy defaults = ModuleFailurePolicy.defaults();
-        if (modulePolicy.onRuntimeFailure() != defaults.onRuntimeFailure()) {
-            return modulePolicy.onRuntimeFailure();
+        // Runtime failures are controlled by module runtime policy, not kernel initialization fallback.
+        return modulePolicy.onRuntimeFailure();
+    }
+
+    private static ModuleFailurePolicyAction resolvePhasePolicy(
+        ModuleFailurePolicyAction moduleAction,
+        ModuleFailurePolicyAction moduleDefaultAction,
+        ModuleFailurePolicyAction kernelFallbackAction
+    ) {
+        if (moduleAction != moduleDefaultAction) {
+            return moduleAction;
         }
-        return properties.getModuleInitializationFailurePolicy();
+        return kernelFallbackAction;
     }
 
     private static String reportKey(String moduleId, Object source, String origin) {

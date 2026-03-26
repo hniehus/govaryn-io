@@ -1,21 +1,21 @@
-package io.govaryn.kernel.examples.modules;
+package io.govaryn.modules.examples;
 
 import io.govaryn.kernel.api.KernelModule;
 import io.govaryn.kernel.module.ModuleMetadata;
 import io.govaryn.kernel.module.ModuleType;
 
 /**
- * Negative example: second module in a duplicate moduleId pair.
+ * Negative example: module requiring an incompatible kernel API version.
  */
-public class DuplicateIdModuleB implements KernelModule {
+public class IncompatibleApiVersionModule implements KernelModule {
 
     @Override
     public ModuleMetadata metadata() {
         return ModuleMetadata.minimal(
-            "reference-duplicate-id",
-            "Reference Duplicate Module B",
-            "1.0.1",
-            "^1.0.0",
+            "reference-incompatible-api",
+            "Reference Incompatible API Module",
+            "1.0.0",
+            "^9.0.0",
             ModuleType.FEATURE,
             getClass().getName()
         );

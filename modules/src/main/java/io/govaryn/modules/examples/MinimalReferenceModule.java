@@ -1,4 +1,4 @@
-package io.govaryn.kernel.examples.modules;
+package io.govaryn.modules.examples;
 
 import io.govaryn.kernel.api.KernelContext;
 import io.govaryn.kernel.api.KernelModule;
@@ -6,15 +6,15 @@ import io.govaryn.kernel.module.ModuleMetadata;
 import io.govaryn.kernel.module.ModuleType;
 
 /**
- * Negative example: module that fails during initialization in a controlled way.
+ * Minimal valid reference module for local development and onboarding.
  */
-public class FailingInitializationModule implements KernelModule {
+public class MinimalReferenceModule implements KernelModule {
 
     @Override
     public ModuleMetadata metadata() {
         return ModuleMetadata.minimal(
-            "reference-failing-init",
-            "Reference Failing Init Module",
+            "reference-minimal",
+            "Reference Minimal Module",
             "1.0.0",
             "^1.0.0",
             ModuleType.FEATURE,
@@ -24,6 +24,6 @@ public class FailingInitializationModule implements KernelModule {
 
     @Override
     public void initialize(KernelContext context) {
-        throw new IllegalStateException("Reference module forced initialization failure");
+        // Intentionally minimal no-op initialization.
     }
 }

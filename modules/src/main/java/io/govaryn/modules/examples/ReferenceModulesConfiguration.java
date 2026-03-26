@@ -1,4 +1,4 @@
-package io.govaryn.kernel.examples.modules;
+package io.govaryn.modules.examples;
 
 import io.govaryn.kernel.api.KernelModule;
 import org.springframework.context.annotation.Bean;
@@ -36,5 +36,23 @@ public class ReferenceModulesConfiguration {
     @Profile("module-example-failing-init")
     KernelModule failingInitializationModule() {
         return new FailingInitializationModule();
+    }
+
+    @Bean
+    @Profile("module-example-missing-required-field")
+    KernelModule missingRequiredFieldModule() {
+        return new MissingRequiredFieldModule();
+    }
+
+    @Bean
+    @Profile("module-template")
+    KernelModule moduleTemplateSupportModule() {
+        return new ModuleTemplateSupportModule();
+    }
+
+    @Bean
+    @Profile("module-template")
+    KernelModule moduleTemplateModule() {
+        return new ModuleTemplateModule();
     }
 }

@@ -27,18 +27,26 @@ import static org.junit.jupiter.api.Assertions.fail;
 class KernelArchitectureVerifierTest {
 
     private static final String RUNNING_KERNEL_API_VERSION = "1.2.0";
-    private static final String MODULES_BASE_PACKAGE = "io.govaryn.kernel.examples.modules";
+    private static final String MODULES_BASE_PACKAGE = "io.govaryn.modules.examples";
     private static final Path MODULES_SOURCE_ROOT = Path.of("..", "modules", "src", "main", "java");
+    private static final Path FORBIDDEN_API_SAMPLE = Path.of(
+        "..",
+        "docs",
+        "modules",
+        "negative-examples",
+        "ForbiddenInternalApiUsageModule.java.sample"
+    );
 
     /**
      * Intentional negative reference modules used by scenario tests.
      * They are excluded from conformance verification by design.
      */
     private static final Set<String> EXCLUDED_REFERENCE_FIXTURES = Set.of(
-        "io.govaryn.kernel.examples.modules.IncompatibleApiVersionModule",
-        "io.govaryn.kernel.examples.modules.DuplicateIdModuleA",
-        "io.govaryn.kernel.examples.modules.DuplicateIdModuleB",
-        "io.govaryn.kernel.examples.modules.FailingInitializationModule"
+        "io.govaryn.modules.examples.IncompatibleApiVersionModule",
+        "io.govaryn.modules.examples.DuplicateIdModuleA",
+        "io.govaryn.modules.examples.DuplicateIdModuleB",
+        "io.govaryn.modules.examples.FailingInitializationModule",
+        "io.govaryn.modules.examples.MissingRequiredFieldModule"
     );
 
     @Test
@@ -70,7 +78,7 @@ class KernelArchitectureVerifierTest {
                 .forEach(path -> {
                     try {
                         String content = Files.readString(path);
-                        if (content.contains("io.govaryn.kernel.internal.")) {
+                        if (containsForbiddenInternalApiUsage(content)) {
                             violations.add(path.toAbsolutePath().toString());
                         }
                     } catch (Exception ex) {
@@ -80,6 +88,17 @@ class KernelArchitectureVerifierTest {
         }
 
         assertTrue(violations.isEmpty(), "Forbidden internal API usage detected in module sources: " + violations);
+    }
+
+    @Test
+    @DisplayName("Forbidden internal API sample is detected by verifier rule")
+    void forbiddenInternalApiSampleIsDetected() throws Exception {
+        assertTrue(Files.exists(FORBIDDEN_API_SAMPLE), "Sample file missing: " + FORBIDDEN_API_SAMPLE.toAbsolutePath());
+        String sample = Files.readString(FORBIDDEN_API_SAMPLE);
+        assertTrue(
+            containsForbiddenInternalApiUsage(sample),
+            "Verifier must flag internal API usage in the negative sample"
+        );
     }
 
     @Test
@@ -123,5 +142,9 @@ class KernelArchitectureVerifierTest {
             }
         }
         return List.copyOf(candidates);
+    }
+
+    private static boolean containsForbiddenInternalApiUsage(String content) {
+        return content.contains("io.govaryn.kernel.internal.");
     }
 }

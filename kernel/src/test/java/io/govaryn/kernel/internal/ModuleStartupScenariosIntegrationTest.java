@@ -188,13 +188,13 @@ class ModuleStartupScenariosIntegrationTest {
 
         assertDoesNotThrow(() -> orchestrator.run(new DefaultApplicationArguments(new String[0])));
         assertEquals(
-            ModuleLifecycleState.FAILED,
+            ModuleLifecycleState.DEGRADED,
             registry.findByModuleId("start-failing-module").orElseThrow().status().lifecycleState()
         );
         assertTrue(output.getOut().contains("event=module_start_failed moduleId=start-failing-module"));
         assertTrue(output.getOut().contains("moduleVersion=1.0.0"));
-        assertTrue(output.getOut().contains("currentModuleStatus=FAILED"));
-        assertTrue(output.getOut().contains("policy=REJECT_MODULE_CONTINUE"));
+        assertTrue(output.getOut().contains("currentModuleStatus=DEGRADED"));
+        assertTrue(output.getOut().contains("policy=MARK_MODULE_DEGRADED"));
         assertTrue(output.getOut().contains("errorCause=simulated start failure"));
     }
 

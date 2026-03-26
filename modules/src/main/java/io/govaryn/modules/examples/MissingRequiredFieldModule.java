@@ -1,21 +1,21 @@
-package io.govaryn.kernel.examples.modules;
+package io.govaryn.modules.examples;
 
 import io.govaryn.kernel.api.KernelModule;
 import io.govaryn.kernel.module.ModuleMetadata;
 import io.govaryn.kernel.module.ModuleType;
 
 /**
- * Negative example: module requiring an incompatible kernel API version.
+ * Negative example: invalid module metadata with a missing required field (moduleName).
  */
-public class IncompatibleApiVersionModule implements KernelModule {
+public class MissingRequiredFieldModule implements KernelModule {
 
     @Override
     public ModuleMetadata metadata() {
         return ModuleMetadata.minimal(
-            "reference-incompatible-api",
-            "Reference Incompatible API Module",
+            "reference-missing-required-field",
+            " ",
             "1.0.0",
-            "^9.0.0",
+            "^1.0.0",
             ModuleType.FEATURE,
             getClass().getName()
         );

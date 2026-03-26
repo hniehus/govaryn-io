@@ -8,6 +8,7 @@ import io.govaryn.kernel.config.ModuleFailurePolicyAction;
 import io.govaryn.kernel.config.ModuleMode;
 import io.govaryn.kernel.module.InMemoryModuleRegistry;
 import io.govaryn.kernel.module.ModuleCapabilities;
+import io.govaryn.kernel.module.ModuleFailureDetails;
 import io.govaryn.kernel.module.ModuleFailurePolicy;
 import io.govaryn.kernel.module.ModuleLifecycleState;
 import io.govaryn.kernel.module.ModuleMetadata;
@@ -196,6 +197,40 @@ class ModuleStartupScenariosIntegrationTest {
         assertTrue(output.getOut().contains("currentModuleStatus=DEGRADED"));
         assertTrue(output.getOut().contains("policy=MARK_MODULE_DEGRADED"));
         assertTrue(output.getOut().contains("errorCause=simulated start failure"));
+    }
+
+    @Test
+    @DisplayName("Start failure falls back to FAILED when MARK_MODULE_DEGRADED transition fails")
+    void startFailureFallsBackToFailedWhenMarkDegradedFails(CapturedOutput output) {
+        GovarynKernelProperties properties = baseProperties(ModuleFailurePolicyAction.REJECT_MODULE_CONTINUE);
+        TestKernelModule module = new TestKernelModule("start-fallback-module", false, true);
+        InMemoryModuleRegistry registry = new InMemoryModuleRegistry() {
+            @Override
+            public void markDegraded(String moduleId, ModuleFailureDetails errorDetails) {
+                throw new IllegalStateException("simulated degraded transition failure");
+            }
+        };
+
+        ModuleOrchestrator orchestrator = new ModuleOrchestrator(
+            providerFor(module),
+            properties,
+            () -> List.of(candidate("start-fallback-module", "StartFallbackModule", "^1.0.0", true)),
+            new DefaultModuleValidator(),
+            registry,
+            new ModuleIdentityCollisionDetector(),
+            new ModuleDependencyGraphValidator(),
+            new ModuleInitializationExecutor(),
+            "1.2.0"
+        );
+
+        assertDoesNotThrow(() -> orchestrator.run(new DefaultApplicationArguments(new String[0])));
+        assertEquals(
+            ModuleLifecycleState.FAILED,
+            registry.findByModuleId("start-fallback-module").orElseThrow().status().lifecycleState()
+        );
+        assertTrue(output.getOut().contains("event=module_start_transition_failed moduleId=start-fallback-module"));
+        assertTrue(output.getOut().contains("event=module_start_failed moduleId=start-fallback-module"));
+        assertTrue(output.getOut().contains("policy=MARK_MODULE_DEGRADED"));
     }
 
     @Test

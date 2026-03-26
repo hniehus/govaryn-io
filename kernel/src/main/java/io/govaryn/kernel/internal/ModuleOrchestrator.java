@@ -254,7 +254,13 @@ public class ModuleOrchestrator implements ApplicationRunner {
             degradedCount
         );
 
-        log.info("Govaryn Kernel started with {} module(s)", initializedModules.size());
+        long runningModules = registryEntries.stream()
+            .filter(entry ->
+                entry.status().lifecycleState() == ModuleLifecycleState.INITIALIZED
+                    || entry.status().lifecycleState() == ModuleLifecycleState.DEGRADED
+            )
+            .count();
+        log.info("Govaryn Kernel started with {} running module(s)", runningModules);
     }
 
     private String currentModuleStatus(String moduleId) {
@@ -268,20 +274,13 @@ public class ModuleOrchestrator implements ApplicationRunner {
             "START_FAILED",
             ex.getClass().getSimpleName() + ": " + sanitizeForLog(ex.getMessage())
         );
-        try {
-            if (policy == ModuleFailurePolicyAction.MARK_MODULE_DEGRADED) {
-                moduleRegistry.markDegraded(moduleId, failureDetails);
-            } else {
-                moduleRegistry.transitionState(moduleId, ModuleLifecycleState.FAILED, failureDetails);
+        if (policy == ModuleFailurePolicyAction.MARK_MODULE_DEGRADED) {
+            boolean degraded = safeMarkDegraded(moduleId, failureDetails);
+            if (!degraded) {
+                safeTransitionToFailed(moduleId, failureDetails);
             }
-        } catch (Exception transitionError) {
-            log.warn(
-                "event=module_start_transition_failed moduleId={} currentModuleStatus={} errorType={} errorCause={}",
-                sanitizeForLog(moduleId),
-                sanitizeForLog(currentModuleStatus(moduleId)),
-                transitionError.getClass().getSimpleName(),
-                sanitizeForLog(transitionError.getMessage())
-            );
+        } else {
+            safeTransitionToFailed(moduleId, failureDetails);
         }
 
         log.error(
@@ -301,6 +300,36 @@ public class ModuleOrchestrator implements ApplicationRunner {
             throw new IllegalStateException(
                 "Module start failed and policy is FAIL_FAST: id=" + moduleId + " name=" + module.metadata().moduleName(),
                 ex
+            );
+        }
+    }
+
+    private boolean safeMarkDegraded(String moduleId, ModuleFailureDetails failureDetails) {
+        try {
+            moduleRegistry.markDegraded(moduleId, failureDetails);
+            return true;
+        } catch (Exception transitionError) {
+            log.warn(
+                "event=module_start_transition_failed moduleId={} currentModuleStatus={} errorType={} errorCause={}",
+                sanitizeForLog(moduleId),
+                sanitizeForLog(currentModuleStatus(moduleId)),
+                transitionError.getClass().getSimpleName(),
+                sanitizeForLog(transitionError.getMessage())
+            );
+            return false;
+        }
+    }
+
+    private void safeTransitionToFailed(String moduleId, ModuleFailureDetails failureDetails) {
+        try {
+            moduleRegistry.transitionState(moduleId, ModuleLifecycleState.FAILED, failureDetails);
+        } catch (Exception transitionError) {
+            log.warn(
+                "event=module_start_transition_failed moduleId={} currentModuleStatus={} errorType={} errorCause={}",
+                sanitizeForLog(moduleId),
+                sanitizeForLog(currentModuleStatus(moduleId)),
+                transitionError.getClass().getSimpleName(),
+                sanitizeForLog(transitionError.getMessage())
             );
         }
     }

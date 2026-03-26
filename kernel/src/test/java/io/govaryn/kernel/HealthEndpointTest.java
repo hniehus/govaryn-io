@@ -15,7 +15,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
         "govaryn.kernel.id=test-kernel",
-        "govaryn.kernel.environment=dev"
+        "govaryn.kernel.environment=dev",
+        "spring.application.version=1.2.0"
 })
 class HealthEndpointTest {
 
@@ -27,5 +28,12 @@ class HealthEndpointTest {
         mockMvc.perform(get("/health"))
                 .andExpect(status().isOk())
                 .andExpect(content().json("{\"status\":\"UP\"}"));
+    }
+
+    @Test
+    void moduleStatusEndpointReturns200AndModulesArray() throws Exception {
+        mockMvc.perform(get("/modules/status"))
+            .andExpect(status().isOk())
+            .andExpect(content().json("{\"modules\":[]}"));
     }
 }

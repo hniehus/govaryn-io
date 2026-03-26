@@ -4,6 +4,9 @@ govaryn.kernel.id=local-kernel
 govaryn.kernel.environment=dev
 
 # Reserved for future extension.
-# Supported today: classpath
-# Planned later: plugin-folder
-# govaryn.kernel.module.mode=classpath
+# Supported: CLASSPATH, PLUGIN_FOLDER
+# govaryn.kernel.module.mode=CLASSPATH
+# Optional plugin directory for PLUGIN_FOLDER mode
+# govaryn.kernel.module.plugin-directory=./plugins
+# Initialization failure policy: FAIL_FAST, REJECT_MODULE_CONTINUE, MARK_MODULE_DEGRADED
+# govaryn.kernel.module.failure-policy.initialization=REJECT_MODULE_CONTINUE

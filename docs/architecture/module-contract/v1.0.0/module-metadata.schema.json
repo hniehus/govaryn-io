@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://govaryn.io/schemas/module-contract/v1.0.0/module-metadata.schema.json",
+  "title": "Govaryn Module Metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "moduleContractVersion",
+    "moduleId",
+    "moduleName",
+    "moduleVersion",
+    "requiredKernelApiVersion",
+    "providedCapabilities",
+    "requiredCapabilities",
+    "failurePolicy",
+    "moduleType",
+    "entryPoint"
+  ],
+  "properties": {
+    "moduleContractVersion": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "moduleId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{2,63}$"
+    },
+    "moduleName": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 80
+    },
+    "moduleVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\\\d*)\\\\.(0|[1-9]\\\\d*)\\\\.(0|[1-9]\\\\d*)(?:-[0-9A-Za-z-]+(?:\\\\.[0-9A-Za-z-]+)*)?(?:\\\\+[0-9A-Za-z-]+(?:\\\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "requiredKernelApiVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "providedCapabilities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9.:-]{2,127}$"
+      },
+      "uniqueItems": true
+    },
+    "requiredCapabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9.:-]{2,127}$"
+      },
+      "uniqueItems": true
+    },
+    "optionalCapabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9.:-]{2,127}$"
+      },
+      "uniqueItems": true
+    },
+    "failurePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "onInitializationFailure",
+        "onRuntimeFailure"
+      ],
+      "properties": {
+        "onInitializationFailure": {
+          "type": "string",
+          "enum": [
+            "FAIL_FAST",
+            "REJECT_MODULE_CONTINUE",
+            "MARK_MODULE_DEGRADED"
+          ]
+        },
+        "onRuntimeFailure": {
+          "type": "string",
+          "enum": [
+            "FAIL_FAST",
+            "REJECT_MODULE_CONTINUE",
+            "MARK_MODULE_DEGRADED"
+          ]
+        }
+      }
+    },
+    "moduleType": {
+      "type": "string",
+      "enum": [
+        "core-extension",
+        "integration",
+        "feature",
+        "observability",
+        "security"
+      ]
+    },
+    "entryPoint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "author": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "license": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "homepage": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://.+"
+    },
+    "configSchemaRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "healthChecks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      },
+      "uniqueItems": true
+    }
+  }
+}

@@ -18,6 +18,12 @@ public class GovarynKernelProperties {
     @NotNull(message = "govaryn.kernel.module.mode must not be null")
     private ModuleMode moduleMode = ModuleMode.CLASSPATH;
 
+    @NotBlank(message = "govaryn.kernel.module.plugin-directory must not be blank")
+    private String modulePluginDirectory = "./plugins";
+
+    @NotNull(message = "govaryn.kernel.module.failure-policy.initialization must not be null")
+    private ModuleFailurePolicyAction moduleInitializationFailurePolicy = ModuleFailurePolicyAction.REJECT_MODULE_CONTINUE;
+
     public String getId() {
         return id;
     }
@@ -42,6 +48,22 @@ public class GovarynKernelProperties {
         this.moduleMode = moduleMode;
     }
 
+    public String getModulePluginDirectory() {
+        return modulePluginDirectory;
+    }
+
+    public void setModulePluginDirectory(String modulePluginDirectory) {
+        this.modulePluginDirectory = modulePluginDirectory;
+    }
+
+    public ModuleFailurePolicyAction getModuleInitializationFailurePolicy() {
+        return moduleInitializationFailurePolicy;
+    }
+
+    public void setModuleInitializationFailurePolicy(ModuleFailurePolicyAction moduleInitializationFailurePolicy) {
+        this.moduleInitializationFailurePolicy = moduleInitializationFailurePolicy;
+    }
+
     // Optional: Runtime validation method
     public void validateAgainstSchema() {
         // Example: Check if all required fields are set
@@ -52,5 +74,13 @@ public class GovarynKernelProperties {
             throw new IllegalArgumentException("Required key govaryn.kernel.environment is missing");
         }
         // moduleMode has a default, so no check needed
+        if (KernelConfigurationSchema.getMetadata("govaryn.kernel.module.plugin-directory").required()
+            && (modulePluginDirectory == null || modulePluginDirectory.isBlank())) {
+            throw new IllegalArgumentException("Required key govaryn.kernel.module.plugin-directory is missing or blank");
+        }
+        if (KernelConfigurationSchema.getMetadata("govaryn.kernel.module.failure-policy.initialization").required()
+            && moduleInitializationFailurePolicy == null) {
+            throw new IllegalArgumentException("Required key govaryn.kernel.module.failure-policy.initialization is missing");
+        }
     }
 }

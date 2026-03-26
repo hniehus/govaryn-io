@@ -1,0 +1,31 @@
+package io.govaryn.modules.examples;
+
+import io.govaryn.kernel.api.KernelModule;
+import io.govaryn.kernel.internal.ModuleOrchestrator;
+import io.govaryn.kernel.module.ModuleMetadata;
+import io.govaryn.kernel.module.ModuleType;
+
+/**
+ * Negative example for architecture rule checks:
+ * modules must not import kernel internal APIs.
+ */
+public class ForbiddenInternalApiUsageModule implements KernelModule {
+
+    private final ModuleOrchestrator forbiddenDependency;
+
+    public ForbiddenInternalApiUsageModule(ModuleOrchestrator forbiddenDependency) {
+        this.forbiddenDependency = forbiddenDependency;
+    }
+
+    @Override
+    public ModuleMetadata metadata() {
+        return ModuleMetadata.minimal(
+            "reference-forbidden-internal-api",
+            "Reference Forbidden Internal API Module",
+            "1.0.0",
+            "^1.0.0",
+            ModuleType.FEATURE,
+            getClass().getName()
+        );
+    }
+}

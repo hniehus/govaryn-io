@@ -53,6 +53,25 @@ mvn -pl kernel spring-boot:run \
 - Negative profiles are expected to trigger validation, collision detection, or initialization failure paths.
 - Use them to verify startup behavior, structured diagnostics, and failure-policy handling.
 
+## Security Context Usage Pattern
+
+Current reference modules focus on lifecycle and contract validation; they do not ship a standalone web endpoint.
+For module endpoint implementations, use this pattern:
+
+```java
+@GetMapping("/api/modules/example/whoami")
+Map<String, Object> whoAmI(Authentication authentication) {
+    return Map.of(
+        "subject", authentication.getName(),
+        "authorities", authentication.getAuthorities().stream()
+            .map(GrantedAuthority::getAuthority)
+            .toList()
+    );
+}
+```
+
+This pattern consumes kernel-provided authentication context and avoids independent module token validation.
+
 ## Automated References
 
 Each negative example is referenced in automated tests or verifier checks:

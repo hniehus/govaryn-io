@@ -17,6 +17,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoders;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
 import java.util.List;
@@ -52,6 +53,10 @@ public class KernelHttpSecurityConfiguration {
             .authenticationEntryPoint(authenticationFailureEntryPoint)
         );
         http.exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(authenticationFailureEntryPoint));
+        http.addFilterBefore(
+            new KernelAuthenticationFailureHandlingFilter(authenticationFailureEntryPoint),
+            BearerTokenAuthenticationFilter.class
+        );
 
         return http.build();
     }

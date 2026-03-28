@@ -12,6 +12,17 @@ Document concepts relevant across multiple parts of the system.
 - Test strategy
 - Build and release
 
+## Security (Current Implementation Scope)
+
+- Security can be disabled or enabled via `govaryn.kernel.security.enabled`.
+- When enabled, kernel startup requires valid `issuer-uri` and `audience`.
+- The kernel is configured as a JWT resource server using one configured OIDC issuer.
+- Token validation covers issuer, signature, expiration/not-before, and audience.
+- Public paths are explicitly configured (`govaryn.kernel.security.public-paths`); non-public paths require authentication.
+- Authentication failures return `401` and are logged with sanitized categories (for example issuer mismatch, audience failure, provider/key retrieval failure).
+- JWT identity mapping is standardized by the kernel: subject, issuer, username fallback (`preferred_username` -> `username` -> `sub`), and authorities from configured claim/prefix.
+- Module code is expected to consume kernel-provided authentication context rather than validating tokens independently.
+
 ## Module Versioning and Contract
 
 - All modules must declare `moduleContractVersion`, `moduleVersion`, and

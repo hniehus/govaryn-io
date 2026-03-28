@@ -29,6 +29,10 @@ Responsibilities:
 - `ModuleRegistry`: authoritative registry of module status and metadata.
 - `ModuleDependencyGraphValidator`: capability resolution and cycle detection.
 - `ModuleInitializationExecutor`: controlled initialization with policy handling.
+- `KernelHttpSecurityConfiguration`: central security filter chain and JWT resource-server wiring.
+- `GovarynKernelSecurityProperties`: validated security configuration (`enabled`, `issuer-uri`, `audience`, `public-paths`, authority claim/prefix).
+- `KernelJwtAuthenticationConverter` + `KernelJwtAuthoritiesConverter`: standardized principal/authority mapping from JWT claims.
+- `KernelAuthenticationFailureEntryPoint`: sanitized authentication failure categorization and 401 responses.
 
 ## 5.2 Whitebox Level 2
 

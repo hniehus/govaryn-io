@@ -25,6 +25,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -50,6 +51,8 @@ class KernelHttpSecurityConfigurationTest {
         registry.add("govaryn.kernel.security.enabled", () -> "true");
         registry.add("govaryn.kernel.security.issuer-uri", OIDC::issuerUri);
         registry.add("govaryn.kernel.security.audience", () -> "govaryn-kernel");
+        registry.add("govaryn.kernel.security.authority-claim", () -> "roles");
+        registry.add("govaryn.kernel.security.authority-prefix", () -> "ROLE_");
         registry.add("govaryn.kernel.security.public-paths[0]", () -> "/health");
     }
 
@@ -73,11 +76,26 @@ class KernelHttpSecurityConfigurationTest {
 
     @Test
     void validJwtFromConfiguredIssuerAndAudienceAuthenticates() throws Exception {
-        String token = OIDC.issueToken("kernel-user", OIDC.issuerUri(), "govaryn-kernel", Instant.now(), Instant.now().minusSeconds(10), Instant.now().plusSeconds(300));
+        String token = OIDC.issueToken(
+            "kernel-user",
+            OIDC.issuerUri(),
+            "govaryn-kernel",
+            Instant.now(),
+            Instant.now().minusSeconds(10),
+            Instant.now().plusSeconds(300),
+            Map.of(
+                "preferred_username", "alice",
+                "roles", java.util.List.of("admin", "support")
+            )
+        );
 
         mockMvc.perform(get("/api/kernel/whoami").header("Authorization", "Bearer " + token))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.subject").value("kernel-user"));
+            .andExpect(jsonPath("$.subject").value("kernel-user"))
+            .andExpect(jsonPath("$.issuer").value(OIDC.issuerUri()))
+            .andExpect(jsonPath("$.username").value("alice"))
+            .andExpect(jsonPath("$.authorities[0]").value("ROLE_admin"))
+            .andExpect(jsonPath("$.authorities[1]").value("ROLE_support"));
     }
 
     @Test
@@ -86,6 +104,43 @@ class KernelHttpSecurityConfigurationTest {
 
         mockMvc.perform(get("/api/kernel/whoami").header("Authorization", "Bearer " + token))
             .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void usernameFallsBackToSubjectWhenPreferredUsernameIsMissing() throws Exception {
+        String token = OIDC.issueToken(
+            "fallback-subject",
+            OIDC.issuerUri(),
+            "govaryn-kernel",
+            Instant.now(),
+            Instant.now().minusSeconds(10),
+            Instant.now().plusSeconds(300),
+            Map.of("roles", java.util.List.of("reader"))
+        );
+
+        mockMvc.perform(get("/api/kernel/whoami").header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.subject").value("fallback-subject"))
+            .andExpect(jsonPath("$.username").value("fallback-subject"))
+            .andExpect(jsonPath("$.authorities[0]").value("ROLE_reader"));
+    }
+
+    @Test
+    void authenticationSucceedsWithEmptyAuthoritiesWhenAuthorityClaimIsAbsent() throws Exception {
+        String token = OIDC.issueToken(
+            "no-roles-user",
+            OIDC.issuerUri(),
+            "govaryn-kernel",
+            Instant.now(),
+            Instant.now().minusSeconds(10),
+            Instant.now().plusSeconds(300),
+            Map.of("preferred_username", "no-roles")
+        );
+
+        mockMvc.perform(get("/api/kernel/whoami").header("Authorization", "Bearer " + token))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.username").value("no-roles"))
+            .andExpect(jsonPath("$.authorities").isEmpty());
     }
 
     @Test
@@ -176,16 +231,30 @@ class KernelHttpSecurityConfigurationTest {
             Instant notBefore,
             Instant expiresAt
         ) {
+            return issueToken(subject, issuer, audience, issuedAt, notBefore, expiresAt, Map.of());
+        }
+
+        String issueToken(
+            String subject,
+            String issuer,
+            String audience,
+            Instant issuedAt,
+            Instant notBefore,
+            Instant expiresAt,
+            Map<String, Object> extraClaims
+        ) {
             try {
-                JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                JWTClaimsSet.Builder claimsBuilder = new JWTClaimsSet.Builder()
                     .jwtID(UUID.randomUUID().toString())
                     .subject(subject)
                     .issuer(issuer)
                     .audience(audience)
                     .issueTime(Date.from(issuedAt))
                     .notBeforeTime(Date.from(notBefore))
-                    .expirationTime(Date.from(expiresAt))
-                    .build();
+                    .expirationTime(Date.from(expiresAt));
+
+                extraClaims.forEach(claimsBuilder::claim);
+                JWTClaimsSet claims = claimsBuilder.build();
 
                 SignedJWT jwt = new SignedJWT(
                     new JWSHeader.Builder(JWSAlgorithm.RS256)

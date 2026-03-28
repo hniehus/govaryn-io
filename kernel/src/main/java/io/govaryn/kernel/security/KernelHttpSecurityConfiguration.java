@@ -32,7 +32,6 @@ public class KernelHttpSecurityConfiguration {
         KernelJwtAuthenticationConverter jwtAuthenticationConverter,
         KernelAuthenticationFailureEntryPoint authenticationFailureEntryPoint
     ) throws Exception {
-        http.csrf(AbstractHttpConfigurer::disable);
         http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
         if (!securityProperties.isEnabled()) {

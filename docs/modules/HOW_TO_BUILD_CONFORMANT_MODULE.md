@@ -65,3 +65,31 @@ Check startup logs for:
 - startup summary counters
 
 This is the minimum operability baseline for support and platform teams.
+
+## 7. Consume Kernel Authentication (Do Not Re-Validate Tokens)
+
+If your module exposes HTTP endpoints:
+
+- rely on kernel authentication and the Spring `Authentication` already established by the kernel
+- use authorities from the authenticated context for module logic
+- do not parse/validate bearer tokens inside module code
+
+Example usage pattern:
+
+```java
+@RestController
+class ModuleStatusController {
+
+    @GetMapping("/api/modules/example/status")
+    Map<String, Object> status(Authentication authentication) {
+        return Map.of(
+            "subject", authentication.getName(),
+            "authorities", authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .toList()
+        );
+    }
+}
+```
+
+The module consumes authenticated context only; token validation remains kernel-owned.

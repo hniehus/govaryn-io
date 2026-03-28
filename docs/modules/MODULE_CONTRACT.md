@@ -35,6 +35,16 @@ The module must expose metadata consistent with the formal contract.
 
 Module dependencies must be expressed as capabilities, not direct module references.
 
+## Authentication Ownership Model
+
+Modules may expose protected HTTP endpoints, but authentication ownership is always kernel-side.
+
+- Modules **must** consume the authenticated principal and authorities provided by the kernel security context.
+- Modules **must not** perform independent JWT parsing, signature checks, issuer checks, or audience checks.
+- Modules **must not** register their own token validation pipeline (for example custom `JwtDecoder` or introspection flow).
+
+The kernel is the single source of truth for token validation and authentication state.
+
 ## API Usage Boundary
 
 Modules may use only kernel APIs that are classified as `declared` (or `provisional` with explicit risk acceptance).  

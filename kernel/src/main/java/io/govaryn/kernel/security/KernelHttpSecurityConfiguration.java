@@ -5,7 +5,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -19,7 +18,6 @@ import org.springframework.security.oauth2.jwt.JwtDecoders;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 
 import java.util.List;
 
@@ -30,7 +28,8 @@ public class KernelHttpSecurityConfiguration {
     SecurityFilterChain kernelSecurityFilterChain(
         HttpSecurity http,
         GovarynKernelSecurityProperties securityProperties,
-        KernelJwtAuthenticationConverter jwtAuthenticationConverter
+        KernelJwtAuthenticationConverter jwtAuthenticationConverter,
+        KernelAuthenticationFailureEntryPoint authenticationFailureEntryPoint
     ) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable);
         http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
@@ -48,8 +47,11 @@ public class KernelHttpSecurityConfiguration {
             authorize.anyRequest().authenticated();
         });
 
-        http.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)));
-        http.exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
+        http.oauth2ResourceServer(oauth2 -> oauth2
+            .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter))
+            .authenticationEntryPoint(authenticationFailureEntryPoint)
+        );
+        http.exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(authenticationFailureEntryPoint));
 
         return http.build();
     }

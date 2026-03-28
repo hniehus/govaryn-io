@@ -14,8 +14,11 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -28,6 +31,7 @@ import java.util.Date;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -35,6 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ExtendWith(OutputCaptureExtension.class)
 class KernelHttpSecurityConfigurationTest {
 
     private static final TestOidcServer OIDC = new TestOidcServer();
@@ -149,6 +154,19 @@ class KernelHttpSecurityConfigurationTest {
 
         mockMvc.perform(get("/api/kernel/whoami").header("Authorization", "Bearer " + token))
             .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void authenticationFailureLogsDoNotExposeRawTokenContents(CapturedOutput output) throws Exception {
+        String token = OIDC.issueToken("kernel-user", OIDC.issuerUri(), "different-audience", Instant.now(), Instant.now().minusSeconds(10), Instant.now().plusSeconds(300));
+
+        mockMvc.perform(get("/api/kernel/whoami").header("Authorization", "Bearer " + token))
+            .andExpect(status().isUnauthorized());
+
+        String logs = output.getOut() + output.getErr();
+        assertThat(logs)
+            .contains("category=audience_validation_failure")
+            .doesNotContain(token);
     }
 
     @Test

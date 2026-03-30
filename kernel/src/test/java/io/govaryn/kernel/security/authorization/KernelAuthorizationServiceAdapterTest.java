@@ -64,6 +64,18 @@ class KernelAuthorizationServiceAdapterTest {
         assertEquals(AuthorizationDecisionResult.PERMIT, decision.result());
     }
 
+    @Test
+    @DisplayName("Null operation should be denied safely")
+    void nullOperationShouldBeDeniedSafely() {
+        KernelAuthorizationServiceAdapter adapter = new KernelAuthorizationServiceAdapter(new AllowAllAuthorizationService());
+        AuthorizationSubject subject = new AuthorizationSubject("subject-1", java.util.List.of("ROLE_admin"), Map.of());
+
+        AuthorizationDecision decision = adapter.authorize(subject, (KernelAuthorizationOperation) null);
+
+        assertEquals(AuthorizationDecisionResult.DENY, decision.result());
+        assertEquals(DecisionReasonCode.INVALID_REQUEST, decision.reasonCode());
+    }
+
     private static final class AllowAllAuthorizationService implements AuthorizationService {
         @Override
         public AuthorizationDecision authorize(AuthorizationRequest request) {

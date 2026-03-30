@@ -114,6 +114,39 @@ class KernelPolicyDecisionLoggingTest {
             .doesNotContain("module-1");
     }
 
+    @Test
+    @DisplayName("Sensitive context values should be redacted in logs")
+    void sensitiveContextValuesShouldBeRedactedInLogs(CapturedOutput output) {
+        KernelPolicyDecisionPoint pdp = pdpWithPolicy(
+            new PolicySetDocument(
+                "policy-v3",
+                List.of(rule("permit-read", PolicyEffect.PERMIT, List.of("ROLE_admin"), List.of("read"), List.of("module"), List.of()))
+            )
+        );
+
+        AuthorizationRequest request = new AuthorizationRequest(
+            new AuthorizationSubject("subject-999", List.of("ROLE_admin"), Map.of()),
+            "read",
+            "module",
+            "module-22",
+            Map.of(
+                "environment", "prod",
+                "authorization", "Bearer secret-token-value",
+                "sessionToken", "eyJhbGciOiJIUzI1NiJ9.payload.signature"
+            )
+        );
+
+        pdp.authorize(request);
+
+        String logs = output.getOut() + output.getErr();
+        assertThat(logs)
+            .contains("event=authorization_decision")
+            .contains("authorization=[redacted]")
+            .contains("sessionToken=[redacted]")
+            .doesNotContain("secret-token-value")
+            .doesNotContain("eyJhbGciOiJIUzI1NiJ9.payload.signature");
+    }
+
     private static KernelPolicyDecisionPoint pdpWithPolicy(PolicySetDocument policySetDocument) {
         InMemoryActiveAuthorizationPolicyStore store = new InMemoryActiveAuthorizationPolicyStore();
         store.activate(policySetDocument);

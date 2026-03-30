@@ -65,4 +65,16 @@ class AuthorizationPolicyValidatorTest {
         assertTrue(ex.getMessage().contains("unsupported key: tenant"));
         assertTrue(ex.getMessage().contains("unsupported operator: equals"));
     }
+
+    @Test
+    @DisplayName("Should reject missing top-level fields")
+    void shouldRejectMissingTopLevelFields() {
+        PolicyValidationException ex = assertThrows(
+            PolicyValidationException.class,
+            () -> validator.validate(new ParsedPolicySet(null, null))
+        );
+
+        assertTrue(ex.getMessage().contains("policySetRevision"));
+        assertTrue(ex.getMessage().contains("rules"));
+    }
 }

@@ -20,6 +20,7 @@ public class AuthorizationDecisionLogger {
     private static final Logger log = LoggerFactory.getLogger(AuthorizationDecisionLogger.class);
     private static final int REF_HASH_LENGTH = 12;
     private static final int MAX_VALUE_LENGTH = 64;
+    private static final String REDACTED = "[redacted]";
 
     public void logDecision(
         AuthorizationRequest request,
@@ -64,8 +65,15 @@ public class AuthorizationDecisionLogger {
         return request.context().entrySet().stream()
             .filter(entry -> entry.getKey() != null && entry.getValue() != null)
             .sorted(Map.Entry.comparingByKey())
-            .map(entry -> sanitize(entry.getKey()) + "=" + sanitize(entry.getValue()))
+            .map(entry -> sanitize(entry.getKey()) + "=" + sanitizeContextValue(entry.getKey(), entry.getValue()))
             .collect(Collectors.joining(",", "{", "}"));
+    }
+
+    private String sanitizeContextValue(String key, String value) {
+        if (isSensitiveContextKey(key) || looksSensitiveValue(value)) {
+            return REDACTED;
+        }
+        return sanitize(value);
     }
 
     private String requestValue(AuthorizationRequest request, RequestField field) {
@@ -126,6 +134,29 @@ public class AuthorizationDecisionLogger {
             return sanitized.substring(0, MAX_VALUE_LENGTH);
         }
         return sanitized;
+    }
+
+    private boolean isSensitiveContextKey(String key) {
+        String normalized = key.trim().toLowerCase();
+        return normalized.contains("token")
+            || normalized.contains("secret")
+            || normalized.contains("password")
+            || normalized.contains("credential")
+            || normalized.contains("authorization");
+    }
+
+    private boolean looksSensitiveValue(String value) {
+        String normalized = value.trim();
+        if (normalized.regionMatches(true, 0, "bearer ", 0, 7)) {
+            return true;
+        }
+        int dotCount = 0;
+        for (int i = 0; i < normalized.length(); i++) {
+            if (normalized.charAt(i) == '.') {
+                dotCount++;
+            }
+        }
+        return dotCount == 2 && normalized.length() > 20;
     }
 
     private enum RequestField {

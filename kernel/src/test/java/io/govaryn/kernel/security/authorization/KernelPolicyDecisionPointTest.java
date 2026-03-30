@@ -197,6 +197,35 @@ class KernelPolicyDecisionPointTest {
         assertEquals(DecisionReasonCode.EVALUATION_ERROR, decision.reasonCode());
     }
 
+    @Test
+    @DisplayName("Null request should deny as invalid request")
+    void nullRequestShouldDenyAsInvalidRequest() {
+        KernelPolicyDecisionPoint pdp = pdpWithPolicy(
+            policyOf(
+                rule("permit-read", PolicyEffect.PERMIT, List.of("ROLE_admin"), List.of("read"), List.of("module"), List.of(), Map.of())
+            )
+        );
+
+        AuthorizationDecision decision = pdp.authorize(null);
+
+        assertEquals(AuthorizationDecisionResult.DENY, decision.result());
+        assertEquals(DecisionReasonCode.INVALID_REQUEST, decision.reasonCode());
+    }
+
+    @Test
+    @DisplayName("Missing active policy should deny as policy unavailable")
+    void missingActivePolicyShouldDenyAsPolicyUnavailable() {
+        KernelPolicyDecisionPoint pdp = new KernelPolicyDecisionPoint(
+            new InMemoryActiveAuthorizationPolicyStore(),
+            new AuthorizationDecisionLogger()
+        );
+
+        AuthorizationDecision decision = pdp.authorize(request("ROLE_admin", "read", "module", null, Map.of()));
+
+        assertEquals(AuthorizationDecisionResult.DENY, decision.result());
+        assertEquals(DecisionReasonCode.POLICY_UNAVAILABLE, decision.reasonCode());
+    }
+
     private static KernelPolicyDecisionPoint pdpWithPolicy(PolicySetDocument policySetDocument) {
         InMemoryActiveAuthorizationPolicyStore store = new InMemoryActiveAuthorizationPolicyStore();
         store.activate(policySetDocument);

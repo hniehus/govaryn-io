@@ -52,6 +52,12 @@ class ModuleStatusAuthorizationIntegrationTest {
     private TestKernelSecurityIdentityResolver securityIdentityResolver;
 
     @Test
+    void missingAuthenticationReturnsUnauthorized() throws Exception {
+        mockMvc.perform(get("/modules/status"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void permittedRequestReachesBusinessLogic() throws Exception {
         securityIdentityResolver.setMode(TestKernelSecurityIdentityResolver.Mode.VALID);
         kernelAuthorizationService.setDecision(

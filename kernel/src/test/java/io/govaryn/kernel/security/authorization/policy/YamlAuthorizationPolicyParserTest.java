@@ -2,7 +2,10 @@ package io.govaryn.kernel.security.authorization.policy;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.ClassPathResource;
+
+import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -32,5 +35,31 @@ class YamlAuthorizationPolicyParserTest {
         );
 
         assertTrue(ex.getMessage().contains("Failed to parse policy YAML"));
+    }
+
+    @Test
+    @DisplayName("Should reject wrong field types with clear field path")
+    void shouldRejectWrongFieldTypesWithClearFieldPath() {
+        String yaml = """
+            policySetRevision: "2026-03-30.v1"
+            rules:
+              - id: 123
+                effect: PERMIT
+                subject:
+                  roles:
+                    - ROLE_admin
+                actions:
+                  - read
+                resourceTypes:
+                  - module
+            """;
+
+        PolicyParseException ex = assertThrows(
+            PolicyParseException.class,
+            () -> parser.parse(new ByteArrayResource(yaml.getBytes(StandardCharsets.UTF_8), "inline-invalid-types"))
+        );
+
+        assertTrue(ex.getMessage().contains("rules[0].id"));
+        assertTrue(ex.getMessage().contains("must be a string"));
     }
 }

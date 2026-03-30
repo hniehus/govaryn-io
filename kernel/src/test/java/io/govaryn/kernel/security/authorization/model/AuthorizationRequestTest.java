@@ -56,4 +56,26 @@ class AuthorizationRequestTest {
         assertEquals("abc-123", request.context().get("traceId"));
         assertThrows(UnsupportedOperationException.class, () -> request.context().put("k", "v"));
     }
+
+    @Test
+    @DisplayName("Should reject null context value")
+    void shouldRejectNullContextValue() {
+        Map<String, String> context = new LinkedHashMap<>();
+        context.put("traceId", null);
+
+        IllegalArgumentException ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> new AuthorizationRequest(SUBJECT, "read", "module", null, context)
+        );
+
+        assertTrue(ex.getMessage().contains("context value"));
+    }
+
+    @Test
+    @DisplayName("Should default null context to empty map")
+    void shouldDefaultNullContextToEmptyMap() {
+        AuthorizationRequest request = new AuthorizationRequest(SUBJECT, "read", "module", null, null);
+
+        assertTrue(request.context().isEmpty());
+    }
 }

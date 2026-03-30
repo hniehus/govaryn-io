@@ -209,6 +209,27 @@ class DefaultModuleValidatorTest {
         assertTrue(ex.getMessage().contains("unknown"));
     }
 
+    @Test
+    @DisplayName("Should reject exact release requirement when running kernel is pre-release")
+    void shouldRejectExactReleaseRequirementWhenRunningKernelIsPreRelease() {
+        ModuleDiscoveryCandidate candidate = candidate("orders", "1.0.0", "1.2.3");
+
+        ModuleValidationReport report = validator.validate(List.of(candidate), "1.2.3-rc.1").getFirst();
+
+        assertFalse(report.valid());
+        assertTrue(hasIssue(report, ModuleValidationCode.KERNEL_API_INCOMPATIBLE, "$.requiredKernelApiVersion"));
+    }
+
+    @Test
+    @DisplayName("Should accept release for minimum pre-release requirement")
+    void shouldAcceptReleaseForMinimumPreReleaseRequirement() {
+        ModuleDiscoveryCandidate candidate = candidate("orders", "1.0.0", ">=1.2.3-rc.1");
+
+        ModuleValidationReport report = validator.validate(List.of(candidate), "1.2.3").getFirst();
+
+        assertTrue(report.valid());
+    }
+
     private static ModuleDiscoveryCandidate candidate(String moduleId, String moduleVersion, String requiredKernelApiVersion) {
         return new ModuleDiscoveryCandidate(
             ModuleMetadata.minimal(

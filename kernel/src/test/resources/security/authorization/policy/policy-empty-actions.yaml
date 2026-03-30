@@ -1,0 +1,10 @@
+policySetRevision: "2026-03-30.v3"
+rules:
+  - id: no-actions
+    effect: PERMIT
+    subject:
+      roles:
+        - ROLE_admin
+    actions: []
+    resourceTypes:
+      - module

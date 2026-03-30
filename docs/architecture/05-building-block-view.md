@@ -33,6 +33,13 @@ Responsibilities:
 - `GovarynKernelSecurityProperties`: validated security configuration (`enabled`, `issuer-uri`, `audience`, `public-paths`, authority claim/prefix).
 - `KernelJwtAuthenticationConverter` + `KernelJwtAuthoritiesConverter`: standardized principal/authority mapping from JWT claims.
 - `KernelAuthenticationFailureEntryPoint`: sanitized authentication failure categorization and 401 responses.
+- `KernelSecurityIdentityResolver`: canonical authenticated subject mapping used by protected operations.
+- `KernelPolicyDecisionPoint`: kernel-only PDP for policy evaluation and structured decisions.
+- `AuthorizationPolicyLifecycleService`: startup load + explicit reload orchestration (parse, validate, activate).
+- `InMemoryActiveAuthorizationPolicyStore`: atomic active-policy snapshot store.
+- `AuthorizationDecisionLogger`: structured, sanitized authorization decision diagnostics.
+- `KernelAuthorizationServiceAdapter` + `KernelAuthorizationService`: stable module-facing authorization contract.
+- `AuthorizationPolicyReloadController`: protected internal reload trigger (`POST /api/kernel/internal/authorization/policy/reload`).
 
 ## 5.2 Whitebox Level 2
 

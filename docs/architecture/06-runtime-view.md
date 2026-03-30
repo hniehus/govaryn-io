@@ -9,6 +9,7 @@ This section captures runtime behavior of the modular kernel.
 3. Runtime start failure handling
 4. Observability and operations flow
 5. HTTP authentication flow for public/protected endpoints
+6. Policy-based authorization flow for protected operations
 
 ## Module Startup Lifecycle
 
@@ -62,4 +63,35 @@ sequenceDiagram
         Kernel-->>Client: 401 Unauthorized
         Kernel-->>Kernel: Log sanitized failure category
     end
+```
+
+## Policy Authorization Flow (Kernel-Only PDP)
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Controller as Protected Controller/Module Path
+    participant Resolver as KernelSecurityIdentityResolver
+    participant Contract as KernelAuthorizationService
+    participant PDP as KernelPolicyDecisionPoint
+    participant Store as ActiveAuthorizationPolicyStore
+
+    Client->>Controller: Protected request (authenticated)
+    Controller->>Resolver: resolve(authentication)
+    Resolver-->>Controller: normalized subject
+    Controller->>Contract: authorize(subject, action, resourceType, resourceId?, context?)
+    Contract->>PDP: AuthorizationRequest
+    PDP->>Store: getActivePolicy()
+    Store-->>PDP: active policy snapshot (revision)
+    alt Matching DENY rule exists
+        PDP-->>Controller: DENY (matchedRuleId/reasonCode)
+        Controller-->>Client: 403 Forbidden
+    else Matching PERMIT rule exists
+        PDP-->>Controller: PERMIT
+        Controller-->>Client: 200 OK + business response
+    else No match / evaluation error
+        PDP-->>Controller: DENY (default deny / fail closed)
+        Controller-->>Client: 403 Forbidden
+    end
+    PDP-->>PDP: Log sanitized decision event
 ```

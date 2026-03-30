@@ -1,6 +1,7 @@
 package io.govaryn.kernel.module.validation;
 
 import io.govaryn.kernel.module.ModuleMetadata;
+import io.govaryn.kernel.module.KernelApiVersionCompatibility;
 import io.govaryn.kernel.module.discovery.ModuleDiscoveryCandidate;
 import org.springframework.stereotype.Service;
 
@@ -9,7 +10,6 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -128,7 +128,8 @@ public class DefaultModuleValidator implements ModuleValidator {
             ));
         }
 
-        if (!isBlank(metadata.requiredKernelApiVersion()) && !isSupportedVersionRange(metadata.requiredKernelApiVersion())) {
+        if (!isBlank(metadata.requiredKernelApiVersion())
+            && !KernelApiVersionCompatibility.isSupportedVersionRange(metadata.requiredKernelApiVersion())) {
             issues.add(issue(
                 ModuleValidationCode.INVALID_FIELD_VALUE,
                 "$.requiredKernelApiVersion",
@@ -256,7 +257,7 @@ public class DefaultModuleValidator implements ModuleValidator {
         if (isBlank(metadata.requiredKernelApiVersion())) {
             return;
         }
-        if (!isKernelVersionCompatible(metadata.requiredKernelApiVersion(), runningKernelApiVersion)) {
+        if (!KernelApiVersionCompatibility.isCompatible(metadata.requiredKernelApiVersion(), runningKernelApiVersion)) {
             issues.add(issue(
                 ModuleValidationCode.KERNEL_API_INCOMPATIBLE,
                 "$.requiredKernelApiVersion",
@@ -268,15 +269,7 @@ public class DefaultModuleValidator implements ModuleValidator {
     }
 
     private static void validateRunningKernelApiVersion(String runningKernelApiVersion) {
-        if (isBlank(runningKernelApiVersion)) {
-            throw new IllegalStateException("runningKernelApiVersion must not be blank for module compatibility checks");
-        }
-        String normalized = normalizeVersion(runningKernelApiVersion);
-        if (!SEMVER_PATTERN.matcher(normalized).matches()) {
-            throw new IllegalStateException(
-                "runningKernelApiVersion '" + runningKernelApiVersion + "' is not a valid semantic version"
-            );
-        }
+        KernelApiVersionCompatibility.validateRunningKernelApiVersion(runningKernelApiVersion);
     }
 
     private static void required(String value, String fieldPath, List<ModuleValidationIssue> issues) {
@@ -298,90 +291,6 @@ public class DefaultModuleValidator implements ModuleValidator {
     }
 
     private static boolean isBlank(String value) {
-        return Objects.isNull(value) || value.isBlank();
-    }
-
-    private static boolean isSupportedVersionRange(String range) {
-        String trimmed = range.trim();
-        if ("*".equals(trimmed)) {
-            return true;
-        }
-        if (trimmed.startsWith("^")) {
-            return SEMVER_PATTERN.matcher(trimmed.substring(1)).matches();
-        }
-        if (trimmed.startsWith(">=")) {
-            return SEMVER_PATTERN.matcher(trimmed.substring(2).trim()).matches();
-        }
-        return SEMVER_PATTERN.matcher(trimmed).matches();
-    }
-
-    private static boolean isKernelVersionCompatible(String requiredRange, String runningVersionRaw) {
-        String runningVersion = normalizeVersion(runningVersionRaw);
-        if (!SEMVER_PATTERN.matcher(runningVersion).matches()) {
-            return false;
-        }
-
-        String trimmed = requiredRange.trim();
-        if ("*".equals(trimmed)) {
-            return true;
-        }
-        if (trimmed.startsWith("^")) {
-            String base = trimmed.substring(1).trim();
-            if (!SEMVER_PATTERN.matcher(base).matches()) {
-                return false;
-            }
-            if (compareSemver(runningVersion, base) < 0) {
-                return false;
-            }
-            int[] baseCore = parseSemverCore(base);
-            int[] runningCore = parseSemverCore(runningVersion);
-            if (baseCore[0] > 0) {
-                return baseCore[0] == runningCore[0];
-            }
-            if (baseCore[1] > 0) {
-                return runningCore[0] == 0 && runningCore[1] == baseCore[1];
-            }
-            return runningCore[0] == 0 && runningCore[1] == 0 && runningCore[2] == baseCore[2];
-        }
-        if (trimmed.startsWith(">=")) {
-            String minimum = trimmed.substring(2).trim();
-            if (!SEMVER_PATTERN.matcher(minimum).matches()) {
-                return false;
-            }
-            return compareSemver(runningVersion, minimum) >= 0;
-        }
-        if (!SEMVER_PATTERN.matcher(trimmed).matches()) {
-            return false;
-        }
-        return compareSemver(runningVersion, trimmed) == 0;
-    }
-
-    private static String normalizeVersion(String version) {
-        String trimmed = version.trim();
-        if (SEMVER_PATTERN.matcher(trimmed).matches()) {
-            return trimmed;
-        }
-        int idx = trimmed.indexOf('-');
-        String noQualifier = idx > 0 ? trimmed.substring(0, idx) : trimmed;
-        return SEMVER_PATTERN.matcher(noQualifier).matches() ? noQualifier : trimmed;
-    }
-
-    private static int compareSemver(String left, String right) {
-        int[] l = parseSemverCore(left);
-        int[] r = parseSemverCore(right);
-
-        if (l[0] != r[0]) return Integer.compare(l[0], r[0]);
-        if (l[1] != r[1]) return Integer.compare(l[1], r[1]);
-        return Integer.compare(l[2], r[2]);
-    }
-
-    private static int[] parseSemverCore(String version) {
-        String core = version.split("[-+]")[0];
-        String[] parts = core.split("\\.");
-        return new int[]{
-            Integer.parseInt(parts[0]),
-            Integer.parseInt(parts[1]),
-            Integer.parseInt(parts[2])
-        };
+        return value == null || value.isBlank();
     }
 }

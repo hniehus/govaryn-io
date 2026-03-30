@@ -1,0 +1,11 @@
+policySetRevision: "2026-03-30.v2"
+rules:
+  - id: permit-module-status-read-v2
+    effect: PERMIT
+    subject:
+      roles:
+        - ROLE_admin
+    actions:
+      - read
+    resourceTypes:
+      - module-status

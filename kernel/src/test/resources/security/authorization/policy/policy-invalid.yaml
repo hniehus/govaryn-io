@@ -1,0 +1,14 @@
+policySetRevision: " "
+rules:
+  - id: deny-invalid-rule
+    effect: BLOCK
+    subject:
+      roles:
+        - ROLE_support
+    actions: []
+    resourceTypes:
+      - module
+    context:
+      attributes:
+        environment:
+          anyOf: []

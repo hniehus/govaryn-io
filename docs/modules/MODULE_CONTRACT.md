@@ -45,6 +45,17 @@ Modules may expose protected HTTP endpoints, but authentication ownership is alw
 
 The kernel is the single source of truth for token validation and authentication state.
 
+## Authorization Ownership Model
+
+Authorization decisions for protected capabilities are kernel-owned.
+
+- Modules must delegate decisions to `KernelAuthorizationService`.
+- Modules provide authorization input (`subject`, `action`, `resourceType`, optional `resourceId` and `context`).
+- Modules must not implement their own primary policy decision engine.
+
+Reference:
+- [Module Authorization Contract](../security/MODULE_AUTHORIZATION_CONTRACT.md)
+
 ## API Usage Boundary
 
 Modules may use only kernel APIs that are classified as `declared` (or `provisional` with explicit risk acceptance).  

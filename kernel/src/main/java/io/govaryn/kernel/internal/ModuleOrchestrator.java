@@ -2,6 +2,7 @@ package io.govaryn.kernel.internal;
 
 import io.govaryn.kernel.api.KernelContext;
 import io.govaryn.kernel.api.KernelModule;
+import io.govaryn.kernel.api.KernelAuthorizationService;
 import io.govaryn.kernel.config.GovarynKernelProperties;
 import io.govaryn.kernel.config.ModuleFailurePolicyAction;
 import io.govaryn.kernel.module.ModuleFailureDetails;
@@ -21,6 +22,7 @@ import io.govaryn.kernel.module.validation.ModuleValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -51,6 +53,30 @@ public class ModuleOrchestrator implements ApplicationRunner {
     private final ModuleIdentityCollisionDetector collisionDetector;
     private final ModuleDependencyGraphValidator dependencyGraphValidator;
     private final ModuleInitializationExecutor initializationExecutor;
+    private final KernelAuthorizationService kernelAuthorizationService;
+
+    @Autowired
+    public ModuleOrchestrator(ObjectProvider<KernelModule> modules,
+                              GovarynKernelProperties properties,
+                              ModuleDiscoveryService discoveryService,
+                              ModuleValidator moduleValidator,
+                              ModuleRegistry moduleRegistry,
+                              ModuleIdentityCollisionDetector collisionDetector,
+                              ModuleDependencyGraphValidator dependencyGraphValidator,
+                              ModuleInitializationExecutor initializationExecutor,
+                              ObjectProvider<KernelAuthorizationService> kernelAuthorizationServiceProvider,
+                              @Value("${spring.application.version:${project.version:unknown}}") String kernelVersion) {
+        this.modules = modules.orderedStream().sorted(Comparator.comparingInt(KernelModule::order)).toList();
+        this.properties = properties;
+        this.discoveryService = discoveryService;
+        this.moduleValidator = moduleValidator;
+        this.moduleRegistry = moduleRegistry;
+        this.collisionDetector = collisionDetector;
+        this.dependencyGraphValidator = dependencyGraphValidator;
+        this.initializationExecutor = initializationExecutor;
+        this.kernelAuthorizationService = kernelAuthorizationServiceProvider.getIfAvailable();
+        this.kernelVersion = kernelVersion;
+    }
 
     public ModuleOrchestrator(ObjectProvider<KernelModule> modules,
                               GovarynKernelProperties properties,
@@ -61,20 +87,29 @@ public class ModuleOrchestrator implements ApplicationRunner {
                               ModuleDependencyGraphValidator dependencyGraphValidator,
                               ModuleInitializationExecutor initializationExecutor,
                               @Value("${spring.application.version:${project.version:unknown}}") String kernelVersion) {
-        this.modules = modules.orderedStream().sorted(Comparator.comparingInt(KernelModule::order)).toList();
-        this.properties = properties;
-        this.discoveryService = discoveryService;
-        this.moduleValidator = moduleValidator;
-        this.moduleRegistry = moduleRegistry;
-        this.collisionDetector = collisionDetector;
-        this.dependencyGraphValidator = dependencyGraphValidator;
-        this.initializationExecutor = initializationExecutor;
-        this.kernelVersion = kernelVersion;
+        this(
+            modules,
+            properties,
+            discoveryService,
+            moduleValidator,
+            moduleRegistry,
+            collisionDetector,
+            dependencyGraphValidator,
+            initializationExecutor,
+            nullObjectProvider(),
+            kernelVersion
+        );
     }
 
     @Override
     public void run(ApplicationArguments args) {
-        KernelContext context = new KernelContext(properties.getId(), properties.getEnvironment(), kernelVersion);
+        KernelContext context = new KernelContext(
+            properties.getId(),
+            properties.getEnvironment(),
+            kernelVersion,
+            null,
+            kernelAuthorizationService
+        );
         List<ModuleDiscoveryCandidate> candidates = discoveryService.discover();
         List<ModuleValidationReport> reports = candidates.isEmpty()
             ? List.of()
@@ -266,6 +301,30 @@ public class ModuleOrchestrator implements ApplicationRunner {
     private String currentModuleStatus(String moduleId) {
         Optional<ModuleRegistryEntry> entry = moduleRegistry.findByModuleId(moduleId);
         return entry.map(value -> value.status().lifecycleState().name()).orElse("NOT_REGISTERED");
+    }
+
+    private static <T> ObjectProvider<T> nullObjectProvider() {
+        return new ObjectProvider<>() {
+            @Override
+            public T getObject(Object... args) {
+                return null;
+            }
+
+            @Override
+            public T getIfAvailable() {
+                return null;
+            }
+
+            @Override
+            public T getIfUnique() {
+                return null;
+            }
+
+            @Override
+            public T getObject() {
+                return null;
+            }
+        };
     }
 
     private void handleStartFailure(KernelModule module, ModuleFailurePolicyAction policy, Exception ex) {

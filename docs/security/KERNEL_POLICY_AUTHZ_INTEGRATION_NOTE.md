@@ -1,117 +1,83 @@
 # Kernel-Only Policy Authorization Integration Note
 
-## Current integration points (from repository scan)
+This note describes the implemented kernel authorization integration and where it is wired in the codebase.
 
-- Authenticated subject already exists at HTTP boundary:
-  - `KernelHttpSecurityConfiguration` enforces authenticated vs public routes.
-  - `KernelSecurityIdentityResolver` maps `Authentication` -> `KernelSecurityIdentity`.
-  - `KernelWhoAmIController` shows current normalized subject model.
-- Kernel-level services and orchestration live in:
-  - `io.govaryn.kernel.internal` (`ModuleOrchestrator`, `ModuleInitializationExecutor`)
-  - `io.govaryn.kernel.health` (service/controller pattern)
-  - `io.govaryn.kernel.config` (startup validation and config abstractions)
-- External configuration loading pattern:
-  - Spring config import (`config/application.properties`, optional additional locations)
-  - `@ConfigurationProperties` for typed kernel config (`GovarynKernelProperties`, `GovarynKernelSecurityProperties`)
-  - `ConfigurationManager` merges defaults + external + env and validates via `ConfigurationValidator`
-- Protected operations currently execute in controllers behind `anyRequest().authenticated()` (except configured public paths).
-- Structured diagnostics/logging already implemented with stable patterns:
-  - auth failures: `KernelAuthenticationFailureEntryPoint` (sanitized categories)
-  - lifecycle events: `ModuleOrchestrator`/`ModuleInitializationExecutor` (`event=...` style)
+## Implemented components
 
-## Proposed minimal package locations
-
-- `io.govaryn.kernel.security.authorization.model`
-  - `AuthorizationPolicySet`, `AuthorizationRule`, `AuthorizationEffect`, `AuthorizationRequest`, `AuthorizationDecision`
-- `io.govaryn.kernel.security.authorization.config`
-  - `GovarynKernelAuthorizationProperties` (`@ConfigurationProperties(prefix = "govaryn.kernel.authorization")`)
-- `io.govaryn.kernel.security.authorization.source`
-  - `AuthorizationPolicySource` (interface), `YamlAuthorizationPolicySource`
-- `io.govaryn.kernel.security.authorization.validation`
+- Domain model (`io.govaryn.kernel.security.authorization.model`)
+  - `AuthorizationRequest`
+  - `AuthorizationSubject`
+  - `AuthorizationDecision` / `AuthorizationDecisionResult`
+  - `PolicySet` / `PolicyRule` / `PolicyEffect`
+  - `DecisionReasonCode`
+- YAML policy source and validation (`io.govaryn.kernel.security.authorization.policy`)
+  - `YamlAuthorizationPolicyParser`
   - `AuthorizationPolicyValidator`
-- `io.govaryn.kernel.security.authorization.store`
-  - `ActiveAuthorizationPolicyStore` (interface), `InMemoryActiveAuthorizationPolicyStore`
-- `io.govaryn.kernel.security.authorization.pdp`
+  - `AuthorizationPolicyLifecycleService`
+  - `InMemoryActiveAuthorizationPolicyStore`
+- Kernel-only PDP
   - `KernelPolicyDecisionPoint`
-- `io.govaryn.kernel.security.authorization.logging`
+- Module-facing contract
+  - `KernelAuthorizationService`
+  - `KernelAuthorizationOperation` / `KernelAuthorizationOperations`
+  - `KernelAuthorizationServiceAdapter`
+- Decision logging
   - `AuthorizationDecisionLogger`
-- `io.govaryn.kernel.api`
-  - `KernelAuthorizationService` (module contract)
+- Explicit reload hook
+  - `AuthorizationPolicyReloadController`
+  - endpoint: `POST /api/kernel/internal/authorization/policy/reload`
 
-## Affected existing components (minimal change)
+## Request and decision model
 
-- `KernelContext`
-  - Add optional `KernelAuthorizationService` reference so modules consume kernel authorization contract instead of implementing token/policy logic.
-- `KernelSecurityIdentityResolver`
-  - Reuse as the canonical subject source for PDP requests.
-- `KernelHttpSecurityConfiguration`
-  - Keep existing authn setup; no provider/model change needed.
-- `KernelWhoAmIController` and `ModuleStatusController`
-  - First consumers for explicit PDP checks (smallest controllable boundary).
-- `GovarynKernelSecurityProperties` pattern
-  - Mirror style for authorization properties (`enabled`, `policy-path`, reload settings).
-- `ConfigurationValidator` / startup fail-fast pattern
-  - Reuse behavior: invalid policy should fail startup when authorization is enabled.
+Authorization request input:
 
-## Building blocks: minimal implementation approach
+- `subject` (required)
+- `action` (required)
+- `resourceType` (required)
+- `resourceId` (optional)
+- `context` (optional constrained map, V1 key: `environment`)
 
-- Authorization domain model:
-  - Small immutable records with explicit fields; default decision is deny.
-  - Rule matching initially on: subject authorities, operation id, resource pattern.
-- YAML policy source:
-  - Load one kernel-owned YAML policy file from configured local path.
-  - No external backend, no multi-provider support.
-- Policy validator:
-  - Validate schema + semantic checks (unique rule ids, valid effects, non-empty match criteria).
-  - Fail fast with key/rule-path specific messages.
-- Active policy store:
-  - In-memory atomic snapshot (`AtomicReference<AuthorizationPolicySet>`).
-- PDP:
-  - Deterministic rule evaluation order.
-  - Return decision object (`ALLOW`/`DENY`, ruleId, reason).
-  - Deny by default if no rule matches or policy unavailable.
-- Module authorization contract:
-  - `KernelAuthorizationService` in kernel API for module consumption.
-  - Modules pass operation/resource + current kernel subject; module code does not parse tokens.
-- Decision logging:
-  - Structured `event=authorization_decision` logs with sanitized fields (`subject`, `operation`, `resource`, `decision`, `ruleId`).
-  - Never log raw token or sensitive claim payloads.
-- Policy reload hook:
-  - Start with explicit kernel hook method `reload()` on a coordinator service.
-  - Optional first trigger: protected kernel admin endpoint (later if needed), reusing current HTTP security.
+Decision semantics:
 
-## Recommended implementation sequence
+1. Matching `DENY` rule exists -> final `DENY`
+2. Else matching `PERMIT` rule exists -> final `PERMIT`
+3. Else -> `DENY` (default deny)
+4. Evaluation error -> `DENY` (fail closed)
 
-1. Add authorization properties + domain model + YAML source + validator.
-2. Add active store + startup loader (load and validate once; fail closed).
-3. Add PDP + decision logger and unit tests.
-4. Add `KernelAuthorizationService` contract and wire into `KernelContext`.
-5. Add first guarded operation checks in kernel controllers (`/modules/status` first).
-6. Add reload hook service and tests; optionally expose via protected endpoint.
-7. Update docs/config examples with minimal new keys and sample policy file.
+## Protected execution integration points
 
-## Testing alignment with repository conventions
+- Platform path:
+  - `ModuleStatusController` enforces kernel authorization before business logic for `GET /modules/status`.
+  - Denied/invalid subject/evaluation failures return `403`.
+- Module path reference:
+  - `ReferenceFeatureModule#restartProtectedModule(...)` delegates to `KernelAuthorizationService`.
 
-- Unit tests (JUnit 5) for model/validator/PDP/store.
-- Spring tests with `@SpringBootTest` + `MockMvc` for endpoint allow/deny behavior.
-- Log assertions using `OutputCaptureExtension` or logback `ListAppender` (existing pattern in security tests).
-- Dynamic config tests with `@DynamicPropertySource` for policy path and enablement flags.
+## Policy lifecycle behavior
 
-## Open technical assumptions
+- Startup (when `govaryn.kernel.authorization.enabled=true`):
+  - parse YAML -> validate -> activate snapshot
+  - startup fails on invalid policy
+- Reload:
+  - same parse/validate/activate flow
+  - activation occurs only if valid
+  - failed reload keeps last known valid policy active
+  - revision changes only on successful activation
 
-- Policy decisions are kernel-owned and request-scoped for HTTP operations.
-- Initial subject attributes for policy matching are limited to normalized authorities + subject/username from `KernelSecurityIdentity`.
-- Current scope does not require per-tenant, per-module persisted policy state, or distributed policy sync.
-- Reload semantics are local-process only (single node), atomic snapshot replace.
+## Decision logging behavior
 
-## Endpoints and how to test (current + planned touchpoints)
+- Structured event: `event=authorization_decision`
+- Logged fields include result, reason code, matched rule id, action, resource type, policy revision, request reference (if present in MDC), and sanitized context.
+- Subject/resource identifiers are hashed references.
+- Sensitive context keys/values are redacted.
+- Raw tokens/credentials/secrets are not logged.
 
-- Current public endpoint: `GET /health`
-  - Test without token: `200`.
-- Current protected endpoint: `GET /api/kernel/whoami`
-  - Test without token: `401`.
-  - Test with valid JWT: `200` and identity payload.
-- First planned policy-enforced endpoint: `GET /modules/status`
-  - Test with authenticated subject that has matching policy rule: `200`.
-  - Test with authenticated subject without matching rule: `403`.
-  - Test with missing/invalid policy when authz enabled: startup failure or deny-by-default (as configured).
+## Testing coverage summary (current)
+
+- Domain model validation/invariants
+- YAML parsing and malformed input rejection
+- Semantic policy validation (duplicate ids, invalid context/operators, required fields)
+- Active store behavior and atomic snapshot replacement
+- PDP decision semantics (permit/deny/conflicts/default deny/fail closed)
+- Protected endpoint enforcement (`/modules/status`) including `403` and unauthenticated `401`
+- Decision logging field coverage and sanitization
+- Reload behavior (successful switch, failed reload retention, revision updates on success only)

@@ -85,6 +85,8 @@ mvn -B -ntp clean test
 - Health: http://localhost:8080/actuator/health
 - Metrics: http://localhost:8080/actuator/metrics
 - Info: http://localhost:8080/actuator/info
+- Who am I (protected): http://localhost:8080/api/kernel/whoami
+- Module status (protected + policy-enforced): http://localhost:8080/modules/status
 
 ---
 
@@ -101,6 +103,22 @@ The Kernel includes Spring Boot Actuator for monitoring and metrics.
 **Configuration**:
 - `management.endpoints.web.exposure.include` — expose specific endpoints
 - `management.endpoint.health.show-details` — control health endpoint detail level
+
+---
+
+## Kernel Policy Authorization (Current)
+
+The kernel implements policy-based authorization with a kernel-owned PDP.
+
+- Policy source: external YAML (`govaryn.kernel.authorization.policy-path`)
+- Decision model: deny overrides permit, default deny when no rule matches, fail closed on evaluation errors
+- Module contract: modules delegate authorization decisions to `KernelAuthorizationService`
+- Reload hook: `POST /api/kernel/internal/authorization/policy/reload` (protected endpoint)
+
+Reference docs:
+- `docs/security/AUTHORIZATION_POLICY_FORMAT.md`
+- `docs/security/MODULE_AUTHORIZATION_CONTRACT.md`
+- `docs/security/KERNEL_POLICY_AUTHZ_INTEGRATION_NOTE.md`
 
 ---
 

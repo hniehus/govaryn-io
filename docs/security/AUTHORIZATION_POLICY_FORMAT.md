@@ -68,6 +68,29 @@ rules:
 
 When authorization policy loading is enabled, startup requires a valid policy file.
 
+## Decision semantics
+
+For each authorization request:
+
+1. Matching `DENY` rule exists -> final decision `DENY`
+2. Else matching `PERMIT` rule exists -> final decision `PERMIT`
+3. Else -> `DENY` (default deny)
+4. Internal evaluation errors -> `DENY` (fail closed)
+
+`DENY` always overrides `PERMIT` when both match.
+
+## Validation behavior
+
+Validation rejects malformed/inconsistent policies, including:
+
+- missing required top-level fields
+- duplicate rule ids
+- invalid `effect` values
+- empty `actions` or `resourceTypes`
+- unsupported context keys/operators
+
+Invalid policy reload attempts are rejected and do not replace the active policy.
+
 ## Explicit reload hook
 
 Kernel exposes a protected internal reload endpoint:
@@ -82,3 +105,27 @@ Reload behavior:
 4. Atomically activate only if valid
 
 If reload validation fails, the currently active (last known valid) policy remains active.
+
+## Example snippet
+
+```yaml
+policySetRevision: "2026-03-30.v1"
+rules:
+  - id: permit-module-status-read
+    effect: PERMIT
+    subject:
+      roles: [ROLE_admin, ROLE_support]
+    actions: [read]
+    resourceTypes: [module-status]
+
+  - id: deny-stop-module-in-prod
+    effect: DENY
+    subject:
+      roles: [ROLE_operator]
+    actions: [stop]
+    resourceTypes: [module]
+    context:
+      attributes:
+        environment:
+          anyOf: [prod]
+```

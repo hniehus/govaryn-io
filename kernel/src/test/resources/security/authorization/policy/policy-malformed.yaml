@@ -1,0 +1,17 @@
+policySetRevision: "2026-03-30.v1"
+rules:
+  - id: permit-broken
+    effect: PERMIT
+    subject:
+      roles:
+        - ROLE_admin
+    actions:
+      - read
+    resourceTypes:
+      - module
+    context:
+      attributes:
+        environment:
+          anyOf:
+            - prod
+  - id: this-line-breaks: [oops

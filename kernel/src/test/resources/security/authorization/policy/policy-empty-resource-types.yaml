@@ -1,0 +1,10 @@
+policySetRevision: "2026-03-30.v4"
+rules:
+  - id: no-resource-types
+    effect: PERMIT
+    subject:
+      roles:
+        - ROLE_admin
+    actions:
+      - read
+    resourceTypes: []

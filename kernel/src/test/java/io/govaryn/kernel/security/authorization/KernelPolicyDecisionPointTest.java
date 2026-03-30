@@ -189,7 +189,7 @@ class KernelPolicyDecisionPointTest {
                 throw new UnsupportedOperationException("Not used");
             }
         };
-        KernelPolicyDecisionPoint pdp = new KernelPolicyDecisionPoint(failingStore);
+        KernelPolicyDecisionPoint pdp = new KernelPolicyDecisionPoint(failingStore, new AuthorizationDecisionLogger());
 
         AuthorizationDecision decision = pdp.authorize(request("ROLE_admin", "read", "module", null, Map.of()));
 
@@ -200,7 +200,7 @@ class KernelPolicyDecisionPointTest {
     private static KernelPolicyDecisionPoint pdpWithPolicy(PolicySetDocument policySetDocument) {
         InMemoryActiveAuthorizationPolicyStore store = new InMemoryActiveAuthorizationPolicyStore();
         store.activate(policySetDocument);
-        return new KernelPolicyDecisionPoint(store);
+        return new KernelPolicyDecisionPoint(store, new AuthorizationDecisionLogger());
     }
 
     private static PolicySetDocument policyOf(PolicyRuleDocument... rules) {

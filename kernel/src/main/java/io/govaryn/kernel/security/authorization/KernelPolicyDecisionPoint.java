@@ -24,24 +24,44 @@ public class KernelPolicyDecisionPoint implements AuthorizationService {
     private static final Logger log = LoggerFactory.getLogger(KernelPolicyDecisionPoint.class);
 
     private final ActiveAuthorizationPolicyStore activePolicyStore;
+    private final AuthorizationDecisionLogger decisionLogger;
 
-    public KernelPolicyDecisionPoint(ActiveAuthorizationPolicyStore activePolicyStore) {
+    public KernelPolicyDecisionPoint(
+        ActiveAuthorizationPolicyStore activePolicyStore,
+        AuthorizationDecisionLogger decisionLogger
+    ) {
         this.activePolicyStore = activePolicyStore;
+        this.decisionLogger = decisionLogger;
     }
 
     @Override
     public AuthorizationDecision authorize(AuthorizationRequest request) {
         if (request == null) {
-            return new AuthorizationDecision(AuthorizationDecisionResult.DENY, DecisionReasonCode.INVALID_REQUEST, null);
+            AuthorizationDecision decision = new AuthorizationDecision(
+                AuthorizationDecisionResult.DENY,
+                DecisionReasonCode.INVALID_REQUEST,
+                null
+            );
+            decisionLogger.logDecision(null, decision, "none", null);
+            return decision;
         }
 
+        String activeRevision = "none";
         try {
             Optional<ActiveAuthorizationPolicySnapshot> active = activePolicyStore.getActivePolicy();
             if (active.isEmpty()) {
-                return new AuthorizationDecision(AuthorizationDecisionResult.DENY, DecisionReasonCode.POLICY_UNAVAILABLE, null);
+                AuthorizationDecision decision = new AuthorizationDecision(
+                    AuthorizationDecisionResult.DENY,
+                    DecisionReasonCode.POLICY_UNAVAILABLE,
+                    null
+                );
+                decisionLogger.logDecision(request, decision, activeRevision, null);
+                return decision;
             }
 
-            PolicySetDocument policy = active.get().policySet();
+            ActiveAuthorizationPolicySnapshot snapshot = active.get();
+            PolicySetDocument policy = snapshot.policySet();
+            activeRevision = snapshot.revision();
             String matchingPermitRuleId = null;
             String matchingDenyRuleId = null;
 
@@ -57,23 +77,39 @@ public class KernelPolicyDecisionPoint implements AuthorizationService {
             }
 
             if (matchingDenyRuleId != null) {
-                return new AuthorizationDecision(
+                AuthorizationDecision decision = new AuthorizationDecision(
                     AuthorizationDecisionResult.DENY,
                     DecisionReasonCode.DENY_RULE_MATCHED,
                     matchingDenyRuleId
                 );
+                decisionLogger.logDecision(request, decision, activeRevision, null);
+                return decision;
             }
             if (matchingPermitRuleId != null) {
-                return new AuthorizationDecision(
+                AuthorizationDecision decision = new AuthorizationDecision(
                     AuthorizationDecisionResult.PERMIT,
                     DecisionReasonCode.PERMIT_RULE_MATCHED,
                     matchingPermitRuleId
                 );
+                decisionLogger.logDecision(request, decision, activeRevision, null);
+                return decision;
             }
-            return new AuthorizationDecision(AuthorizationDecisionResult.DENY, DecisionReasonCode.NO_MATCHING_RULE, null);
+            AuthorizationDecision decision = new AuthorizationDecision(
+                AuthorizationDecisionResult.DENY,
+                DecisionReasonCode.NO_MATCHING_RULE,
+                null
+            );
+            decisionLogger.logDecision(request, decision, activeRevision, null);
+            return decision;
         } catch (Exception ex) {
             log.warn("event=authorization_decision_failed reason=evaluation_error errorType={}", ex.getClass().getSimpleName());
-            return new AuthorizationDecision(AuthorizationDecisionResult.DENY, DecisionReasonCode.EVALUATION_ERROR, null);
+            AuthorizationDecision decision = new AuthorizationDecision(
+                AuthorizationDecisionResult.DENY,
+                DecisionReasonCode.EVALUATION_ERROR,
+                null
+            );
+            decisionLogger.logDecision(request, decision, activeRevision, ex);
+            return decision;
         }
     }
 

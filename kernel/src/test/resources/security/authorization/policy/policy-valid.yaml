@@ -1,0 +1,40 @@
+policySetRevision: "2026-03-30.v1"
+rules:
+  - id: permit-module-status-read
+    effect: PERMIT
+    subject:
+      roles:
+        - ROLE_admin
+        - ROLE_support
+    actions:
+      - read
+    resourceTypes:
+      - module-status
+
+  - id: deny-stop-module-in-prod
+    effect: DENY
+    subject:
+      roles:
+        - ROLE_operator
+        - ROLE_support
+    actions:
+      - stop
+    resourceTypes:
+      - module
+    context:
+      attributes:
+        environment:
+          anyOf:
+            - prod
+
+  - id: permit-restart-reference-minimal
+    effect: PERMIT
+    subject:
+      roles:
+        - ROLE_admin
+    actions:
+      - restart
+    resourceTypes:
+      - module
+    resourceIds:
+      - reference-minimal

@@ -12,9 +12,10 @@ import java.util.List;
 import java.util.Map;
 
 @Component
-public class YamlAuthorizationPolicyParser {
+public class YamlAuthorizationPolicyParser implements AuthorizationPolicySourceLoader {
 
-    public ParsedPolicySet parse(Path policyPath) {
+    @Override
+    public ParsedPolicySet load(Path policyPath) {
         return parse(new FileSystemResource(policyPath));
     }
 

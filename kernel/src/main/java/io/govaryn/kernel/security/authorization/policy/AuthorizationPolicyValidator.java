@@ -12,12 +12,13 @@ import java.util.Map;
 import java.util.Set;
 
 @Component
-public class AuthorizationPolicyValidator {
+public class AuthorizationPolicyValidator implements AuthorizationPolicySemanticValidator {
 
     private static final Set<String> SUPPORTED_CONTEXT_TOP_LEVEL_KEYS = Set.of("attributes");
     private static final Set<String> SUPPORTED_CONTEXT_ATTRIBUTE_KEYS = Set.of("environment");
     private static final Set<String> SUPPORTED_CONTEXT_ATTRIBUTE_OPERATORS = Set.of("anyOf");
 
+    @Override
     public PolicySetDocument validate(ParsedPolicySet parsedPolicy) {
         List<String> errors = new ArrayList<>();
         String policySetRevision = sanitizeRequiredString(parsedPolicy == null ? null : parsedPolicy.policySetRevision(), "policySetRevision", errors);

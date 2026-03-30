@@ -60,3 +60,10 @@ rules:
   - `kernel/src/test/resources/security/authorization/policy/policy-valid.yaml`
 - Invalid example:
   - `kernel/src/test/resources/security/authorization/policy/policy-invalid.yaml`
+
+## Runtime loading configuration
+
+- `govaryn.kernel.authorization.enabled=true`
+- `govaryn.kernel.authorization.policy-path=/absolute/or/relative/path/to/policy.yaml`
+
+When authorization policy loading is enabled, startup requires a valid policy file.

@@ -16,3 +16,4 @@ Capture significant architecture decisions and their rationale.
 ## Current Gaps
 
 - The JWT/OIDC security foundation is implemented in `kernel/src/main/java/io/govaryn/kernel/security`, but no dedicated ADR exists yet in `docs/adr`.
+- The kernel-only policy authorization implementation is active in `kernel/src/main/java/io/govaryn/kernel/security/authorization`, but no dedicated ADR exists yet in `docs/adr`.

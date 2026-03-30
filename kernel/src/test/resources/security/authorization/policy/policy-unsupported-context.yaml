@@ -1,0 +1,18 @@
+policySetRevision: "2026-03-30.v5"
+rules:
+  - id: unsupported-context
+    effect: DENY
+    subject:
+      roles:
+        - ROLE_support
+    actions:
+      - stop
+    resourceTypes:
+      - module
+    context:
+      tenant:
+        anyOf:
+          - tenant-a
+      attributes:
+        environment:
+          equals: prod

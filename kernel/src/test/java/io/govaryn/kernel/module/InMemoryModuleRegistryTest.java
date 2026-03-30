@@ -148,4 +148,24 @@ class InMemoryModuleRegistryTest {
         assertEquals("RUNTIME_FAILURE", entry.status().lastError().errorCode());
         assertEquals(ModuleLifecycleState.DEGRADED, entry.status().lifecycleState());
     }
+
+    @Test
+    @DisplayName("Should reject exact release requirement for pre-release running kernel")
+    void shouldRejectExactReleaseRequirementForPreReleaseRunningKernel() {
+        InMemoryModuleRegistry registry = new InMemoryModuleRegistry();
+        ModuleMetadata metadata = ModuleMetadata.minimal(
+            "api-strict",
+            "ApiStrictModule",
+            "1.0.0",
+            "1.2.3",
+            ModuleType.FEATURE,
+            "io.govaryn.modules.apistrict.ApiStrictModule"
+        );
+
+        IllegalStateException ex = assertThrows(
+            IllegalStateException.class,
+            () -> registry.registerValidated(metadata, false, "classpath:ApiStrictModule", "1.2.3-rc.1")
+        );
+        assertTrue(ex.getMessage().contains("incompatible"));
+    }
 }

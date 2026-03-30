@@ -28,17 +28,17 @@ public class ModuleIdentityCollisionDetector {
                     candidate.source(),
                     candidate.origin()
                 ));
+        }
 
-            Optional<ModuleRegistryEntry> existing = registry.findByModuleId(candidate.metadata().moduleId());
-            existing.ifPresent(entry ->
-                byModuleId.get(candidate.metadata().moduleId()).add(new ModuleIdentityReference(
-                    entry.metadata().moduleId(),
-                    entry.metadata().moduleName(),
-                    entry.metadata().moduleVersion(),
-                    ModuleDiscoverySource.PLUGIN_DIRECTORY,
-                    entry.origin()
-                ))
-            );
+        for (Map.Entry<String, List<ModuleIdentityReference>> entry : byModuleId.entrySet()) {
+            Optional<ModuleRegistryEntry> existing = registry.findByModuleId(entry.getKey());
+            existing.ifPresent(registered -> entry.getValue().add(new ModuleIdentityReference(
+                registered.metadata().moduleId(),
+                registered.metadata().moduleName(),
+                registered.metadata().moduleVersion(),
+                ModuleDiscoverySource.PLUGIN_DIRECTORY,
+                registered.origin()
+            )));
         }
 
         return byModuleId.entrySet().stream()

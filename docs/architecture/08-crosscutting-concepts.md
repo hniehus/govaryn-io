@@ -23,6 +23,32 @@ Document concepts relevant across multiple parts of the system.
 - JWT identity mapping is standardized by the kernel: subject, issuer, username fallback (`preferred_username` -> `username` -> `sub`), and authorities from configured claim/prefix.
 - Module code is expected to consume kernel-provided authentication context rather than validating tokens independently.
 
+## Authorization (Kernel-Only Policy Model)
+
+- Authorization decisions are kernel-owned and evaluated by `KernelPolicyDecisionPoint`.
+- Decision input model (`AuthorizationRequest`) includes:
+  - `subject` (`AuthorizationSubject`: `subjectId`, `roles`, optional attributes)
+  - `action` (required)
+  - `resourceType` (required)
+  - `resourceId` (optional)
+  - `context` (optional constrained map, current supported key: `environment`)
+- Policy source is external YAML, loaded and validated at startup when enabled.
+- Semantics:
+  - if at least one matching `DENY` rule exists -> final `DENY`
+  - else if at least one matching `PERMIT` rule exists -> final `PERMIT`
+  - else -> `DENY` (default deny)
+  - evaluation error -> `DENY` (fail closed)
+- Reload behavior:
+  - explicit protected hook: `POST /api/kernel/internal/authorization/policy/reload`
+  - invalid reload attempts are rejected and keep last known valid policy active.
+
+## Logging and Diagnostics (Authorization)
+
+- Authorization decisions are logged as structured events (`event=authorization_decision`) including result, reason, matched rule, policy revision, and request reference (if available in MDC).
+- Subject and resource identifiers are logged as hashed references, not raw identifiers.
+- Context fields are sanitized; sensitive keys/values are redacted.
+- Raw tokens, credentials, and secrets must not be logged.
+
 ## Module Versioning and Contract
 
 - All modules must declare `moduleContractVersion`, `moduleVersion`, and

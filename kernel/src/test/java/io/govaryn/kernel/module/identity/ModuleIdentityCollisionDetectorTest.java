@@ -83,6 +83,44 @@ class ModuleIdentityCollisionDetectorTest {
         assertTrue(message.contains("/plugins/audit/module.json"));
     }
 
+    @Test
+    @DisplayName("Should include registry entry only once for duplicated candidate moduleId")
+    void shouldIncludeRegistryEntryOnlyOnceForDuplicatedCandidateModuleId() {
+        ModuleIdentityCollisionDetector detector = new ModuleIdentityCollisionDetector();
+        InMemoryModuleRegistry registry = new InMemoryModuleRegistry();
+        registry.registerValidated(
+            ModuleMetadata.minimal(
+                "shared-id",
+                "RegisteredModule",
+                "1.0.0",
+                "^1.0.0",
+                ModuleType.FEATURE,
+                "io.govaryn.modules.RegisteredModule"
+            ),
+            true,
+            "classpath:RegisteredModule",
+            "1.2.0"
+        );
+
+        ModuleDiscoveryCandidate first = candidate(
+            "shared-id",
+            "PluginModuleA",
+            "/plugins/a/module.json",
+            ModuleDiscoverySource.MANIFEST_SCAN
+        );
+        ModuleDiscoveryCandidate second = candidate(
+            "shared-id",
+            "PluginModuleB",
+            "/plugins/b/module.json",
+            ModuleDiscoverySource.MANIFEST_SCAN
+        );
+
+        List<ModuleIdentityCollision> collisions = detector.detect(List.of(first, second), registry);
+
+        assertEquals(1, collisions.size());
+        assertEquals(3, collisions.getFirst().references().size());
+    }
+
     private static ModuleDiscoveryCandidate candidate(
         String moduleId,
         String moduleName,

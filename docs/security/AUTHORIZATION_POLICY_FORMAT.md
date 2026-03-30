@@ -1,0 +1,131 @@
+# Kernel Authorization Policy Format (V1)
+
+This document defines the V1 YAML format for kernel-owned policy authorization.
+
+## Goals
+
+- Declarative and strongly structured
+- No expression language
+- No scripting
+- Suitable for deterministic machine validation
+
+## Top-level structure
+
+```yaml
+policySetRevision: "2026-03-30.v1"
+rules:
+  - ...
+```
+
+- `policySetRevision` (required, string): policy set revision identifier.
+- `rules` (required, non-empty list): ordered policy rules.
+
+## Rule structure
+
+```yaml
+- id: permit-module-status-read
+  effect: PERMIT
+  subject:
+    roles: [ROLE_admin, ROLE_support]
+  actions: [read]
+  resourceTypes: [module-status]
+  resourceIds: [reference-minimal]     # optional
+  context:                              # optional
+    attributes:
+      environment:
+        anyOf: [prod]
+```
+
+- `id` (required, string): unique rule identifier within a policy set.
+- `effect` (required): `PERMIT` or `DENY`.
+- `subject.roles` (required, non-empty list of strings): role-based subject match criteria.
+- `actions` (required, non-empty list of strings).
+- `resourceTypes` (required, non-empty list of strings).
+- `resourceIds` (optional list of strings).
+- `context.attributes` (optional object):
+  - key = context attribute name
+  - value object currently supports:
+    - `anyOf` (required, non-empty list of strings)
+
+## V1 matching model limits
+
+- Exact membership style matching only.
+- No boolean expressions.
+- No arithmetic/string expression operators.
+- No embedded script execution.
+
+## Example files in repository
+
+- Valid example:
+  - `kernel/src/test/resources/security/authorization/policy/policy-valid.yaml`
+- Invalid example:
+  - `kernel/src/test/resources/security/authorization/policy/policy-invalid.yaml`
+
+## Runtime loading configuration
+
+- `govaryn.kernel.authorization.enabled=true`
+- `govaryn.kernel.authorization.policy-path=/absolute/or/relative/path/to/policy.yaml`
+
+When authorization policy loading is enabled, startup requires a valid policy file.
+
+## Decision semantics
+
+For each authorization request:
+
+1. Matching `DENY` rule exists -> final decision `DENY`
+2. Else matching `PERMIT` rule exists -> final decision `PERMIT`
+3. Else -> `DENY` (default deny)
+4. Internal evaluation errors -> `DENY` (fail closed)
+
+`DENY` always overrides `PERMIT` when both match.
+
+## Validation behavior
+
+Validation rejects malformed/inconsistent policies, including:
+
+- missing required top-level fields
+- duplicate rule ids
+- invalid `effect` values
+- empty `actions` or `resourceTypes`
+- unsupported context keys/operators
+
+Invalid policy reload attempts are rejected and do not replace the active policy.
+
+## Explicit reload hook
+
+Kernel exposes a protected internal reload endpoint:
+
+- `POST /api/kernel/internal/authorization/policy/reload`
+
+Reload behavior:
+
+1. Read YAML policy from `govaryn.kernel.authorization.policy-path`
+2. Parse YAML into policy DTOs
+3. Run semantic validation
+4. Atomically activate only if valid
+
+If reload validation fails, the currently active (last known valid) policy remains active.
+
+## Example snippet
+
+```yaml
+policySetRevision: "2026-03-30.v1"
+rules:
+  - id: permit-module-status-read
+    effect: PERMIT
+    subject:
+      roles: [ROLE_admin, ROLE_support]
+    actions: [read]
+    resourceTypes: [module-status]
+
+  - id: deny-stop-module-in-prod
+    effect: DENY
+    subject:
+      roles: [ROLE_operator]
+    actions: [stop]
+    resourceTypes: [module]
+    context:
+      attributes:
+        environment:
+          anyOf: [prod]
+```

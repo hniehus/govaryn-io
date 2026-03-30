@@ -67,3 +67,18 @@ rules:
 - `govaryn.kernel.authorization.policy-path=/absolute/or/relative/path/to/policy.yaml`
 
 When authorization policy loading is enabled, startup requires a valid policy file.
+
+## Explicit reload hook
+
+Kernel exposes a protected internal reload endpoint:
+
+- `POST /api/kernel/internal/authorization/policy/reload`
+
+Reload behavior:
+
+1. Read YAML policy from `govaryn.kernel.authorization.policy-path`
+2. Parse YAML into policy DTOs
+3. Run semantic validation
+4. Atomically activate only if valid
+
+If reload validation fails, the currently active (last known valid) policy remains active.

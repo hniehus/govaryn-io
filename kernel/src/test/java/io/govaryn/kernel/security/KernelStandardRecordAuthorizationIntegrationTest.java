@@ -94,7 +94,7 @@ class KernelStandardRecordAuthorizationIntegrationTest {
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
             .andExpect(jsonPath("$.message").value("Forbidden"))
-            .andExpect(jsonPath("$.reason").value("RESOURCE_ACCESS_DENIED"));
+            .andExpect(jsonPath("$.reason").value("ACCESS_DENIED"));
 
         mockMvc.perform(post("/api/kernel/records")
                 .header("Authorization", "Bearer deny-token")
@@ -103,7 +103,7 @@ class KernelStandardRecordAuthorizationIntegrationTest {
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
             .andExpect(jsonPath("$.message").value("Forbidden"))
-            .andExpect(jsonPath("$.reason").value("RESOURCE_ACCESS_DENIED"));
+            .andExpect(jsonPath("$.reason").value("ACCESS_DENIED"));
 
         int afterCount = listCount("allow-token");
         assertThat(afterCount).isEqualTo(beforeCount);

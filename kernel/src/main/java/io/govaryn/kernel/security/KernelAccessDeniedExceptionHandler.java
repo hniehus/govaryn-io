@@ -21,7 +21,7 @@ public class KernelAccessDeniedExceptionHandler {
         KernelAccessDeniedResponse response = new KernelAccessDeniedResponse(
             "ACCESS_DENIED",
             "Forbidden",
-            exception.denyReason().name(),
+            "ACCESS_DENIED",
             request.getRequestURI(),
             Instant.now().toString()
         );

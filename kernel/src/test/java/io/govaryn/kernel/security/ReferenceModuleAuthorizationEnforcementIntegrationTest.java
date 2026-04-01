@@ -109,12 +109,12 @@ class ReferenceModuleAuthorizationEnforcementIntegrationTest {
         mockMvc.perform(get(listPath("tenant-2")).header("Authorization", "Bearer tenant1-read-token"))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
-            .andExpect(jsonPath("$.reason").value("RECORD_ACCESS_DENIED"));
+            .andExpect(jsonPath("$.reason").value("ACCESS_DENIED"));
 
         mockMvc.perform(get(listPath("tenant-1")).header("Authorization", "Bearer tenant1-no-scope-token"))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
-            .andExpect(jsonPath("$.reason").value("RESOURCE_ACCESS_DENIED"));
+            .andExpect(jsonPath("$.reason").value("ACCESS_DENIED"));
     }
 
     @Test
@@ -143,7 +143,7 @@ class ReferenceModuleAuthorizationEnforcementIntegrationTest {
                 .content("{\"value\":\"blocked\"}"))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
-            .andExpect(jsonPath("$.reason").value("RECORD_ACCESS_DENIED"));
+            .andExpect(jsonPath("$.reason").value("ACCESS_DENIED"));
 
         mockMvc.perform(get(readPath("tenant-2", "doc-2")).header("Authorization", "Bearer tenant2-read-token"))
             .andExpect(status().isOk())
@@ -208,7 +208,7 @@ class ReferenceModuleAuthorizationEnforcementIntegrationTest {
                 AuthorizationAction.LIST,
                 ReferenceAuthorizationContract.RESOURCE_TYPE,
                 null,
-                Map.of("tenantId", tenantId)
+                Map.of(ReferenceAuthorizationContract.ATTRIBUTE_TENANT_ID, tenantId)
             );
             return ResponseEntity.ok(fixtureService.list(tenantId));
         }
@@ -220,7 +220,7 @@ class ReferenceModuleAuthorizationEnforcementIntegrationTest {
                 AuthorizationAction.READ,
                 ReferenceAuthorizationContract.RESOURCE_TYPE,
                 documentId,
-                Map.of("tenantId", tenantId)
+                Map.of(ReferenceAuthorizationContract.ATTRIBUTE_TENANT_ID, tenantId)
             );
             return fixtureService.readOne(tenantId, documentId)
                 .map(ResponseEntity::ok)
@@ -238,7 +238,7 @@ class ReferenceModuleAuthorizationEnforcementIntegrationTest {
                 AuthorizationAction.UPDATE,
                 ReferenceAuthorizationContract.RESOURCE_TYPE,
                 documentId,
-                Map.of("tenantId", tenantId)
+                Map.of(ReferenceAuthorizationContract.ATTRIBUTE_TENANT_ID, tenantId)
             );
             return fixtureService.update(tenantId, documentId, request.value())
                 .map(ResponseEntity::ok)

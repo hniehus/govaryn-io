@@ -1,12 +1,7 @@
 package io.govaryn.kernel.security;
 
-import io.govaryn.kernel.api.KernelAuthorizationService;
-import io.govaryn.kernel.api.KernelAuthorizationOperation;
-import io.govaryn.kernel.security.authorization.model.AuthorizationDecision;
-import io.govaryn.kernel.security.authorization.model.AuthorizationDecisionResult;
-import io.govaryn.kernel.security.authorization.model.AuthorizationSubject;
-import io.govaryn.kernel.security.authorization.model.DecisionReasonCode;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,9 +15,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
-import java.util.Map;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -47,10 +40,12 @@ class ModuleStatusAuthorizationIntegrationTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private TestKernelAuthorizationService kernelAuthorizationService;
-
-    @Autowired
     private TestKernelSecurityIdentityResolver securityIdentityResolver;
+
+    @BeforeEach
+    void resetIdentityResolverMode() {
+        securityIdentityResolver.setMode(TestKernelSecurityIdentityResolver.Mode.VALID);
+    }
 
     @Test
     void missingAuthenticationReturnsUnauthorized() throws Exception {
@@ -61,64 +56,44 @@ class ModuleStatusAuthorizationIntegrationTest {
     @Test
     void permittedRequestReachesBusinessLogic() throws Exception {
         securityIdentityResolver.setMode(TestKernelSecurityIdentityResolver.Mode.VALID);
-        kernelAuthorizationService.setDecision(
-            new AuthorizationDecision(AuthorizationDecisionResult.PERMIT, DecisionReasonCode.PERMIT_RULE_MATCHED, "permit-rule")
-        );
 
-        mockMvc.perform(get("/modules/status").header("Authorization", "Bearer test-token"))
+        mockMvc.perform(get("/modules/status").header("Authorization", "Bearer read-token"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.modules").isArray());
-
-        AuthorizationSubject capturedSubject = kernelAuthorizationService.lastSubject();
-        assertThat(capturedSubject).isNotNull();
-        assertThat(capturedSubject.subjectId()).isEqualTo("subject-1");
-        assertThat(capturedSubject.roles()).containsExactly("ROLE_admin");
-        assertThat(capturedSubject.attributes())
-            .containsEntry("roles", "admin")
-            .containsEntry("scope", "module.status:read module.status:write")
-            .containsEntry("tenant_id", "tenant-1");
     }
 
     @Test
     void deniedRequestReturnsForbidden() throws Exception {
         securityIdentityResolver.setMode(TestKernelSecurityIdentityResolver.Mode.VALID);
-        kernelAuthorizationService.setDecision(
-            new AuthorizationDecision(AuthorizationDecisionResult.DENY, DecisionReasonCode.DENY_RULE_MATCHED, "deny-rule")
-        );
 
-        mockMvc.perform(get("/modules/status").header("Authorization", "Bearer test-token"))
-            .andExpect(status().isForbidden());
+        mockMvc.perform(get("/modules/status").header("Authorization", "Bearer no-scope-token"))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+            .andExpect(jsonPath("$.reason").value("ACCESS_DENIED"));
     }
 
     @Test
     void missingSubjectFailsSafelyWithForbidden() throws Exception {
         securityIdentityResolver.setMode(TestKernelSecurityIdentityResolver.Mode.THROW);
-        kernelAuthorizationService.setDecision(
-            new AuthorizationDecision(AuthorizationDecisionResult.PERMIT, DecisionReasonCode.PERMIT_RULE_MATCHED, "permit-rule")
-        );
 
-        mockMvc.perform(get("/modules/status").header("Authorization", "Bearer test-token"))
-            .andExpect(status().isForbidden());
+        mockMvc.perform(get("/modules/status").header("Authorization", "Bearer read-token"))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+            .andExpect(jsonPath("$.reason").value("ACCESS_DENIED"));
     }
 
     @Test
     void invalidSubjectInputFailsSafelyWithForbidden() throws Exception {
         securityIdentityResolver.setMode(TestKernelSecurityIdentityResolver.Mode.BLANK_SUBJECT);
-        kernelAuthorizationService.setDecision(
-            new AuthorizationDecision(AuthorizationDecisionResult.PERMIT, DecisionReasonCode.PERMIT_RULE_MATCHED, "permit-rule")
-        );
 
-        mockMvc.perform(get("/modules/status").header("Authorization", "Bearer test-token"))
-            .andExpect(status().isForbidden());
+        mockMvc.perform(get("/modules/status").header("Authorization", "Bearer read-token"))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+            .andExpect(jsonPath("$.reason").value("ACCESS_DENIED"));
     }
 
     @TestConfiguration
     static class TestSecurityBeans {
-        @Bean
-        @Primary
-        TestKernelAuthorizationService testKernelAuthorizationService() {
-            return new TestKernelAuthorizationService();
-        }
 
         @Bean
         @Primary
@@ -128,55 +103,59 @@ class ModuleStatusAuthorizationIntegrationTest {
 
         @Bean("kernelJwtDecoder")
         JwtDecoder kernelJwtDecoder() {
-            return token -> Jwt.withTokenValue(token)
+            return token -> switch (token) {
+                case "read-token" -> jwt(
+                    token,
+                    "subject-1",
+                    "https://idp.example.com/realms/main",
+                    "alice",
+                    "tenant-1",
+                    "module.status:read",
+                    java.util.List.of("admin")
+                );
+                case "no-scope-token" -> jwt(
+                    token,
+                    "subject-2",
+                    "https://idp.example.com/realms/main",
+                    "bob",
+                    "tenant-1",
+                    "",
+                    java.util.List.of("viewer")
+                );
+                default -> jwt(
+                    token,
+                    "subject-default",
+                    "https://idp.example.com/realms/main",
+                    "default-user",
+                    "tenant-1",
+                    "",
+                    java.util.List.of("viewer")
+                );
+            };
+        }
+
+        private static Jwt jwt(
+            String token,
+            String subject,
+            String issuer,
+            String username,
+            String tenantId,
+            String scope,
+            java.util.List<String> roles
+        ) {
+            return Jwt.withTokenValue(token)
                 .header("alg", "none")
-                .claim("sub", "subject-1")
-                .claim("iss", "https://idp.example.com/realms/main")
+                .claim("sub", subject)
+                .claim("iss", issuer)
                 .claim("aud", java.util.List.of("govaryn-kernel"))
-                .claim("preferred_username", "alice")
-                .claim("tenant_id", "tenant-1")
-                .claim("scope", "module.status:write module.status:read")
-                .claim("roles", java.util.List.of("admin"))
+                .claim("preferred_username", username)
+                .claim("tenant_id", tenantId)
+                .claim("scope", scope)
+                .claim("roles", roles)
                 .issuedAt(Instant.now().minusSeconds(5))
                 .notBefore(Instant.now().minusSeconds(5))
                 .expiresAt(Instant.now().plusSeconds(60))
                 .build();
-        }
-
-    }
-
-    static class TestKernelAuthorizationService implements KernelAuthorizationService {
-        private volatile AuthorizationDecision decision = new AuthorizationDecision(
-            AuthorizationDecisionResult.PERMIT,
-            DecisionReasonCode.PERMIT_RULE_MATCHED,
-            "permit-rule"
-        );
-        private volatile AuthorizationSubject lastSubject;
-
-        void setDecision(AuthorizationDecision decision) {
-            this.decision = decision;
-        }
-
-        AuthorizationSubject lastSubject() {
-            return lastSubject;
-        }
-
-        @Override
-        public AuthorizationDecision authorize(AuthorizationSubject subject, KernelAuthorizationOperation operation) {
-            this.lastSubject = subject;
-            return decision;
-        }
-
-        @Override
-        public AuthorizationDecision authorize(
-            AuthorizationSubject subject,
-            String action,
-            String resourceType,
-            String resourceId,
-            Map<String, String> context
-        ) {
-            this.lastSubject = subject;
-            return decision;
         }
     }
 
@@ -199,12 +178,7 @@ class ModuleStatusAuthorizationIntegrationTest {
                     "alice",
                     java.util.List.of("ROLE_admin")
                 );
-                case VALID -> new KernelSecurityIdentity(
-                    "subject-1",
-                    "https://idp.example.com/realms/main",
-                    "alice",
-                    java.util.List.of("ROLE_admin")
-                );
+                case VALID -> super.resolve(authentication);
             };
         }
     }

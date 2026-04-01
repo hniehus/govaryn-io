@@ -1,6 +1,7 @@
 package io.govaryn.kernel.security.authorization.framework;
 
 import io.govaryn.kernel.backend.standard.KernelStandardRecordContract;
+import io.govaryn.kernel.health.security.ModuleStatusAuthorizationContract;
 import io.govaryn.kernel.security.authorization.framework.model.AuthorizationAction;
 import io.govaryn.kernel.security.authorization.framework.model.AuthorizationDecision;
 import org.junit.jupiter.api.DisplayName;
@@ -23,6 +24,12 @@ class KernelProtectedAuthorizationIntegrationGuardrailTest {
             KernelStandardRecordContract.MODULE_ID,
             KernelStandardRecordContract.RESOURCE_TYPE,
             EnumSet.allOf(AuthorizationAction.class),
+            request -> AuthorizationDecision.allow("test-policy")
+        ));
+        registry.register(new ResourcePolicyRegistration(
+            ModuleStatusAuthorizationContract.MODULE_ID,
+            ModuleStatusAuthorizationContract.RESOURCE_TYPE,
+            EnumSet.of(AuthorizationAction.READ),
             request -> AuthorizationDecision.allow("test-policy")
         ));
 

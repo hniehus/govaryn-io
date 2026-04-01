@@ -1,6 +1,7 @@
 package io.govaryn.kernel.security.authorization.framework;
 
 import io.govaryn.kernel.backend.standard.KernelStandardRecordContract;
+import io.govaryn.kernel.health.security.ModuleStatusAuthorizationContract;
 import io.govaryn.kernel.security.authorization.framework.model.AuthorizationAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +31,11 @@ public class KernelProtectedAuthorizationIntegrationGuardrail implements SmartIn
                 AuthorizationAction.UPDATE,
                 AuthorizationAction.DELETE
             )
+        ),
+        new ProtectedResourceRequirement(
+            ModuleStatusAuthorizationContract.MODULE_ID,
+            ModuleStatusAuthorizationContract.RESOURCE_TYPE,
+            EnumSet.of(AuthorizationAction.READ)
         )
     );
 

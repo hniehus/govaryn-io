@@ -7,6 +7,7 @@ public final class ReferenceAuthorizationContract {
 
     public static final String MODULE_ID = "reference-authz-module";
     public static final String RESOURCE_TYPE = "reference-document";
+    public static final String ATTRIBUTE_TENANT_ID = "tenantId";
 
     public static final String SCOPE_READ = "reference.documents.read";
     public static final String SCOPE_WRITE = "reference.documents.write";

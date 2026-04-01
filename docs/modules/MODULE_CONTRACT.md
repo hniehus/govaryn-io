@@ -47,11 +47,13 @@ The kernel is the single source of truth for token validation and authentication
 
 ## Authorization Ownership Model
 
-Authorization decisions for protected capabilities are kernel-owned.
+Authorization for protected backend paths is kernel-controlled through the kernel authorization framework.
 
-- Modules must delegate decisions to `KernelAuthorizationService`.
-- Modules provide authorization input (`subject`, `action`, `resourceType`, optional `resourceId` and `context`).
-- Modules must not implement their own primary policy decision engine.
+- Modules register resource/action/evaluator rules through `ModuleSecurityContributor`.
+- Modules must not implement an independent primary policy decision or enforcement pipeline for protected standard paths.
+- Standard kernel-managed paths enforce automatically through `KernelAuthorizationEnforcer`.
+- Denied access uses a consistent platform response (`403 ACCESS_DENIED`) and structured deny audit logging.
+- Protected integrations can be rejected at startup by `KernelProtectedAuthorizationIntegrationGuardrail` when required registrations are missing.
 
 Reference:
 - [Module Authorization Contract](../security/MODULE_AUTHORIZATION_CONTRACT.md)

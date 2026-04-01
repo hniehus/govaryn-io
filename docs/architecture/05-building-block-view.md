@@ -33,13 +33,21 @@ Responsibilities:
 - `GovarynKernelSecurityProperties`: validated security configuration (`enabled`, `issuer-uri`, `audience`, `public-paths`, authority claim/prefix).
 - `KernelJwtAuthenticationConverter` + `KernelJwtAuthoritiesConverter`: standardized principal/authority mapping from JWT claims.
 - `KernelAuthenticationFailureEntryPoint`: sanitized authentication failure categorization and 401 responses.
-- `KernelSecurityIdentityResolver`: canonical authenticated subject mapping used by protected operations.
-- `KernelPolicyDecisionPoint`: kernel-only PDP for policy evaluation and structured decisions.
-- `AuthorizationPolicyLifecycleService`: startup load + explicit reload orchestration (parse, validate, activate).
-- `InMemoryActiveAuthorizationPolicyStore`: atomic active-policy snapshot store.
-- `AuthorizationDecisionLogger`: structured, sanitized authorization decision diagnostics.
-- `KernelAuthorizationServiceAdapter` + `KernelAuthorizationService`: stable module-facing authorization contract.
-- `AuthorizationPolicyReloadController`: protected internal reload trigger (`POST /api/kernel/internal/authorization/policy/reload`).
+- `KernelSecurityIdentityResolver` + `KernelSecurityContextFactory` + `KernelRequestSecurityContext`: canonical authenticated identity/context normalization for authorization.
+- `ModuleSecurityContributor` + `ModuleSecurityContributionRegistrar`: module SPI and registration pipeline for protected resources/actions/evaluators.
+- `ResourcePolicyRegistry` (`InMemoryResourcePolicyRegistry`): kernel registry of module policy registrations.
+- `KernelAuthorizationService` + `KernelAuthorizationEnforcer`: central authorization orchestration and explicit kernel-managed enforcement hook.
+- `AuthorizationAuditLogger`: structured deny audit logging.
+- `KernelAccessDeniedException` + `KernelAccessDeniedExceptionHandler`: standardized deny exception and `403 ACCESS_DENIED` response mapping.
+- `KernelProtectedAuthorizationIntegrationGuardrail`: startup validation for required protected contracts.
+- `KernelStandardRecordController` + `ModuleStatusController`: current standard paths with kernel-controlled authorization enforcement.
+- Legacy operation-level policy components remain available:
+  - `KernelPolicyDecisionPoint`
+  - `AuthorizationPolicyLifecycleService`
+  - `InMemoryActiveAuthorizationPolicyStore`
+  - `AuthorizationDecisionLogger`
+  - `KernelAuthorizationServiceAdapter` + `io.govaryn.kernel.api.KernelAuthorizationService`
+  - `AuthorizationPolicyReloadController` (`POST /api/kernel/internal/authorization/policy/reload`)
 
 ## 5.2 Whitebox Level 2
 

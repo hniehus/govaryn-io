@@ -5,11 +5,13 @@ import io.govaryn.kernel.security.authorization.framework.model.AuthorizationAct
 import java.util.Set;
 
 /**
- * Registry abstraction used by module contributors to declare authorization surface.
+ * Registry abstraction exposed to module contributors for protected resource declarations.
  */
 public interface ModuleSecurityRegistry {
 
-    void registerModuleActions(String moduleId, Set<AuthorizationAction> actions);
-
-    void registerResourceActions(String moduleId, String resourceType, Set<AuthorizationAction> actions);
+    void registerResourcePolicy(
+        String resourceType,
+        Set<AuthorizationAction> supportedActions,
+        ResourcePolicyEvaluator evaluator
+    );
 }

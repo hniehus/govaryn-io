@@ -73,4 +73,10 @@ public class ReferenceModulesConfiguration {
     KernelModule referenceFeatureModuleFailingInit() {
         return new ReferenceFeatureModule(true);
     }
+
+    @Bean
+    @Profile("module-reference-authz-e2e")
+    ReferenceAuthorizationModule referenceAuthorizationModule() {
+        return new ReferenceAuthorizationModule();
+    }
 }

@@ -93,3 +93,52 @@ class ModuleStatusController {
 ```
 
 The module consumes authenticated context only; token validation remains kernel-owned.
+
+## 8. Register Protected Resource Rules Through Kernel SPI
+
+If your module has protected resources, provide a `ModuleSecurityContributor` bean and register resource policies.
+
+- define `moduleId()` with your module identity
+- register each protected `resourceType`
+- declare supported `AuthorizationAction` values
+- implement evaluator logic that returns explicit `AuthorizationDecision`
+
+Example:
+
+```java
+@Component
+final class ExampleSecurityContributor implements ModuleSecurityContributor {
+
+    @Override
+    public String moduleId() {
+        return "example-module";
+    }
+
+    @Override
+    public void contribute(ModuleSecurityRegistry registry) {
+        registry.registerResourcePolicy(
+            "example-resource",
+            EnumSet.of(AuthorizationAction.READ, AuthorizationAction.UPDATE),
+            this::evaluate
+        );
+    }
+
+    private AuthorizationDecision evaluate(AuthorizationRequest request) {
+        Set<String> scopes = AuthorizationScopeExtractor.extractScopes(request);
+        if (request.action() == AuthorizationAction.READ && scopes.contains("example.read")) {
+            return AuthorizationDecision.allow("example.scope-policy");
+        }
+        return AuthorizationDecision.deny(DenyReason.RESOURCE_ACCESS_DENIED, "example.scope-policy");
+    }
+}
+```
+
+Keep evaluator logic explicit and deterministic. Do not add a module-local enforcement pipeline.
+
+## 9. Use Kernel Enforcement Path
+
+- For kernel standard backend paths, authorization is enforced automatically by the kernel before service access.
+- For additional protected module endpoints, call `KernelAuthorizationEnforcer` before business logic.
+- Throwing/propagating `KernelAccessDeniedException` preserves the platform-standard deny response (`403 ACCESS_DENIED`).
+
+Denied decisions are logged structurally (`event=authorization_deny_audit`) by the kernel; do not duplicate sensitive payload logging in module code.

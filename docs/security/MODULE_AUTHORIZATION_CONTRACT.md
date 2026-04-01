@@ -1,57 +1,103 @@
-# Module Authorization Contract (Kernel-Owned Decisions)
+# Module Authorization Contract (Kernel Authorization Framework)
 
-Modules must delegate authorization decisions to the kernel through `KernelAuthorizationService`.
+This contract defines how modules integrate domain authorization rules into the kernel-owned enforcement pipeline.
 
-## Authorization request structure
+## Ownership split
 
-Modules provide decision input only. The kernel owns decision evaluation.
+Kernel owns:
+- security context creation from authenticated request state
+- authorization orchestration and enforcement (`KernelAuthorizationService`, `KernelAuthorizationEnforcer`)
+- deny exception/response mapping (`KernelAccessDeniedException` -> `403 ACCESS_DENIED`)
+- structured deny audit logging (`AuthorizationAuditLogger`)
+- startup guardrails for protected integrations (`KernelProtectedAuthorizationIntegrationGuardrail`)
 
-- `subject`: `AuthorizationSubject(subjectId, roles, attributes)`
-- `action`: required operation name
-- `resourceType`: required resource class
-- `resourceId`: optional object-level identifier
-- `context`: optional constrained key-value map
+Module owns:
+- protected `resourceType` values
+- supported `AuthorizationAction` set per resource
+- evaluator logic for domain/scope/tenant/record checks
 
-## Required inputs
+Modules provide rules through `ModuleSecurityContributor`. Modules do not own an independent enforcement pipeline for protected standard paths.
 
-- `subject` (who is requesting)
-- `action` (required)
-- `resourceType` (required)
+## Module registration SPI
 
-## Optional inputs
+1. Provide a Spring bean implementing `ModuleSecurityContributor`.
+2. Return the owning `moduleId()` value.
+3. Register each protected resource through `ModuleSecurityRegistry.registerResourcePolicy(resourceType, supportedActions, evaluator)`.
+4. Return `AuthorizationDecision.allow(...)` or `AuthorizationDecision.deny(...)` from the evaluator.
 
-- `resourceId` (object-level authorization)
-- `context` (constrained key-value attributes)
-
-## Input validation guidance
-
-`KernelAuthorizationOperation` validates:
-- `action` format: `^[a-z][a-z0-9._:-]{1,63}$`
-- `resourceType` format: `^[a-z][a-z0-9._:-]{1,63}$`
-- supported context keys (V1): `environment`
-
-Invalid or missing required input is rejected safely and results in a deny decision when routed via `KernelAuthorizationService`.
-
-## Reference usage
-
-See `ReferenceFeatureModule#restartProtectedModule(...)` for delegation before business execution.
-
-## Developer example
+### Minimal example
 
 ```java
-AuthorizationDecision decision = kernelContext.authorizationService().authorize(
-    new AuthorizationSubject(identity.subject(), List.copyOf(identity.authorities()), Map.of()),
-    KernelAuthorizationOperations.of(
-        "restart",
-        "module",
-        "reference-minimal",
-        Map.of("environment", "prod")
-    )
-);
+@Component
+final class ExampleSecurityContributor implements ModuleSecurityContributor {
 
-if (decision.result() != AuthorizationDecisionResult.PERMIT) {
-    throw new IllegalStateException("Forbidden");
+    @Override
+    public String moduleId() {
+        return "example-module";
+    }
+
+    @Override
+    public void contribute(ModuleSecurityRegistry registry) {
+        registry.registerResourcePolicy(
+            "example-resource",
+            EnumSet.of(AuthorizationAction.READ, AuthorizationAction.UPDATE),
+            this::evaluate
+        );
+    }
+
+    private AuthorizationDecision evaluate(AuthorizationRequest request) {
+        Set<String> scopes = AuthorizationScopeExtractor.extractScopes(request);
+        if (request.action() == AuthorizationAction.READ && scopes.contains("example.read")) {
+            return AuthorizationDecision.allow("example.scope-policy");
+        }
+        return AuthorizationDecision.deny(DenyReason.RESOURCE_ACCESS_DENIED, "example.scope-policy");
+    }
 }
 ```
 
-This pattern keeps modules free of policy ownership and token validation logic.
+## Security context and request model
+
+Evaluator input comes through `AuthorizationRequest` and includes:
+- `securityContext.userId`
+- `securityContext.tenantId` (if available)
+- `securityContext.globalRoles`
+- `securityContext.claims` (for example `scope`/`scp`)
+- `action`, `moduleId`, `resourceType`, optional `resourceId`, optional `attributes`
+
+## Kernel enforcement behavior on standard paths
+
+- Kernel-managed standard paths call `KernelAuthorizationEnforcer` before business access.
+- Current protected standard paths include:
+  - `KernelStandardRecordController` (`READ`, `LIST`, `CREATE`, `UPDATE`, `DELETE`)
+  - `ModuleStatusController` (`READ`)
+- Denied decisions are mapped consistently to `403` with `{code=ACCESS_DENIED, reason=ACCESS_DENIED}`.
+
+## Deny audit logging
+
+Denied decisions emit structured `warn` logs with `event=authorization_deny_audit`.
+
+Logged fields include:
+- `timestamp`
+- `userId`
+- `tenantId`
+- `module`
+- `resourceType`
+- `action`
+- `resourceId`
+- `decision`
+- `denyReason`
+- request/correlation reference from MDC (when available)
+- `errorType` (for evaluator failures)
+
+## Guardrails
+
+- Invalid registrations fail fast (blank identifiers, empty actions, duplicate module/resource registration).
+- Protected integration guardrail validates required registrations on startup and fails startup on missing actions/registrations.
+- Current required protected contracts are:
+  - `kernel-standard-backend` / `kernel-record` with `READ`, `LIST`, `CREATE`, `UPDATE`, `DELETE`
+  - `kernel-module-status` / `module-status` with `READ`
+
+## Scope notes
+
+- This contract is the first-cut application-layer framework for protected standard backend paths.
+- Policy DSL, database-native row-level security, and dynamic authorization admin configuration are intentionally out of scope.

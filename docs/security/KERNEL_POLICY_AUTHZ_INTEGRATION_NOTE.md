@@ -1,6 +1,9 @@
-# Kernel-Only Policy Authorization Integration Note
+# Kernel-Only Policy Authorization Integration Note (Legacy Path)
 
-This note describes the implemented kernel authorization integration and where it is wired in the codebase.
+This note describes the legacy operation-level policy integration in `io.govaryn.kernel.security.authorization`.
+
+For the current protected standard backend path integration (module SPI, kernel enforcement, deny audit logging, and guardrails), use:
+- [MODULE_AUTHORIZATION_CONTRACT.md](./MODULE_AUTHORIZATION_CONTRACT.md)
 
 ## Implemented components
 
@@ -46,11 +49,9 @@ Decision semantics:
 
 ## Protected execution integration points
 
-- Platform path:
-  - `ModuleStatusController` enforces kernel authorization before business logic for `GET /modules/status`.
-  - Denied/invalid subject/evaluation failures return `403`.
-- Module path reference:
+- Legacy module path reference:
   - `ReferenceFeatureModule#restartProtectedModule(...)` delegates to `KernelAuthorizationService`.
+- `ModuleStatusController` now uses the kernel authorization framework path (`KernelAuthorizationEnforcer` + `ModuleSecurityContributor`) instead of this legacy operation-level flow.
 
 ## Policy lifecycle behavior
 
@@ -78,6 +79,6 @@ Decision semantics:
 - Semantic policy validation (duplicate ids, invalid context/operators, required fields)
 - Active store behavior and atomic snapshot replacement
 - PDP decision semantics (permit/deny/conflicts/default deny/fail closed)
-- Protected endpoint enforcement (`/modules/status`) including `403` and unauthenticated `401`
+- Legacy protected path enforcement via `ReferenceFeatureModuleAuthorizationIntegrationTest`
 - Decision logging field coverage and sanitization
 - Reload behavior (successful switch, failed reload retention, revision updates on success only)

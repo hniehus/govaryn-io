@@ -23,31 +23,38 @@ Document concepts relevant across multiple parts of the system.
 - JWT identity mapping is standardized by the kernel: subject, issuer, username fallback (`preferred_username` -> `username` -> `sub`), and authorities from configured claim/prefix.
 - Module code is expected to consume kernel-provided authentication context rather than validating tokens independently.
 
-## Authorization (Kernel-Only Policy Model)
+## Authorization (Kernel Framework + Module Rules)
 
-- Authorization decisions are kernel-owned and evaluated by `KernelPolicyDecisionPoint`.
-- Decision input model (`AuthorizationRequest`) includes:
-  - `subject` (`AuthorizationSubject`: `subjectId`, `roles`, optional attributes)
-  - `action` (required)
-  - `resourceType` (required)
-  - `resourceId` (optional)
-  - `context` (optional constrained map, current supported key: `environment`)
-- Policy source is external YAML, loaded and validated at startup when enabled.
-- Semantics:
-  - if at least one matching `DENY` rule exists -> final `DENY`
-  - else if at least one matching `PERMIT` rule exists -> final `PERMIT`
-  - else -> `DENY` (default deny)
-  - evaluation error -> `DENY` (fail closed)
-- Reload behavior:
-  - explicit protected hook: `POST /api/kernel/internal/authorization/policy/reload`
-  - invalid reload attempts are rejected and keep last known valid policy active.
+- Authorization for protected backend paths is split into:
+  - kernel-owned framework + enforcement
+  - module-owned resource/action/evaluator rules
+- Kernel framework responsibilities:
+  - build normalized `SecurityContext` from authenticated request context
+  - maintain authorization model (`AuthorizationRequest`, `AuthorizationDecision`, `AuthorizationAction`, `DenyReason`)
+  - register and resolve module policy contributions (`ModuleSecurityContributor`, `ResourcePolicyRegistry`)
+  - orchestrate decisions (`KernelAuthorizationService`)
+  - enforce before business access on kernel-managed paths (`KernelAuthorizationEnforcer`)
+  - return consistent deny behavior (`KernelAccessDeniedException` -> `403 ACCESS_DENIED`)
+  - emit structured deny audit logs (`AuthorizationAuditLogger`)
+  - fail startup for missing required protected integration (`KernelProtectedAuthorizationIntegrationGuardrail`)
+- Module responsibilities:
+  - declare protected resource types
+  - declare supported actions
+  - implement domain evaluator logic (for example tenant/scope checks)
+- Decision behavior is fail-closed:
+  - missing authenticated context -> deny
+  - missing registration / unsupported action -> deny
+  - evaluator error -> deny
+- First-cut actions are standardized (`READ`, `LIST`, `CREATE`, `UPDATE`, `DELETE`).
+- First-cut excludes policy DSL, database-native row-level security, and dynamic admin authorization configuration.
 
 ## Logging and Diagnostics (Authorization)
 
-- Authorization decisions are logged as structured events (`event=authorization_decision`) including result, reason, matched rule, policy revision, and request reference (if available in MDC).
-- Subject and resource identifiers are logged as hashed references, not raw identifiers.
-- Context fields are sanitized; sensitive keys/values are redacted.
-- Raw tokens, credentials, and secrets must not be logged.
+- Denied authorization attempts are logged as structured events (`event=authorization_deny_audit`).
+- Deny audit fields include at least: `timestamp`, `userId`, `tenantId`, `module`, `resourceType`, `action`, `resourceId`, `decision`, `denyReason`, `requestRef`, `errorType`.
+- Security-context mapping failures are logged as structured warnings (`event=security_context_mapping_failed`).
+- Raw tokens, credentials, and sensitive payload data must not be logged.
+- Legacy policy-decision logging (`event=authorization_decision`) remains for operation-level policy flows.
 
 ## Module Versioning and Contract
 

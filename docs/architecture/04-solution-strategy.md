@@ -13,8 +13,9 @@ Summarize the fundamental strategic decisions and architecture approaches.
 ## Current Strategy Notes
 
 - Authentication is kernel-owned and implemented as a JWT resource-server foundation (single configured OIDC-compatible issuer).
-- Authorization is kernel-owned and policy-based:
-  - modules provide decision input (`subject`, `action`, `resourceType`, optional `resourceId` and constrained `context`)
-  - kernel PDP evaluates against active YAML policy
-  - deny overrides permit, default deny, and fail closed on internal errors
-- Policy lifecycle uses external YAML + parse + semantic validation + atomic activation with last-known-valid retention on reload failures.
+- Authorization for protected backend paths is split:
+  - kernel owns the authorization framework (`SecurityContext`, request/decision model, registry, orchestration, deny handling, audit logging, guardrails)
+  - modules own resource/action/evaluator rules through `ModuleSecurityContributor`
+  - enforcement is kernel-controlled through `KernelAuthorizationEnforcer` on standard paths
+- First cut is intentionally small: no policy DSL, no database-native row-level security, no dynamic authorization admin UI.
+- Legacy YAML policy authorization for operation-level checks remains available in `io.govaryn.kernel.security.authorization` and is outside this first-cut framework scope.

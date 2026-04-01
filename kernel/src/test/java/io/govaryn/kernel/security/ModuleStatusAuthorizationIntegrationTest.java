@@ -22,6 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Instant;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -67,6 +68,15 @@ class ModuleStatusAuthorizationIntegrationTest {
         mockMvc.perform(get("/modules/status").header("Authorization", "Bearer test-token"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.modules").isArray());
+
+        AuthorizationSubject capturedSubject = kernelAuthorizationService.lastSubject();
+        assertThat(capturedSubject).isNotNull();
+        assertThat(capturedSubject.subjectId()).isEqualTo("subject-1");
+        assertThat(capturedSubject.roles()).containsExactly("ROLE_admin");
+        assertThat(capturedSubject.attributes())
+            .containsEntry("roles", "admin")
+            .containsEntry("scope", "module.status:read module.status:write")
+            .containsEntry("tenant_id", "tenant-1");
     }
 
     @Test
@@ -124,6 +134,8 @@ class ModuleStatusAuthorizationIntegrationTest {
                 .claim("iss", "https://idp.example.com/realms/main")
                 .claim("aud", java.util.List.of("govaryn-kernel"))
                 .claim("preferred_username", "alice")
+                .claim("tenant_id", "tenant-1")
+                .claim("scope", "module.status:write module.status:read")
                 .claim("roles", java.util.List.of("admin"))
                 .issuedAt(Instant.now().minusSeconds(5))
                 .notBefore(Instant.now().minusSeconds(5))
@@ -139,13 +151,19 @@ class ModuleStatusAuthorizationIntegrationTest {
             DecisionReasonCode.PERMIT_RULE_MATCHED,
             "permit-rule"
         );
+        private volatile AuthorizationSubject lastSubject;
 
         void setDecision(AuthorizationDecision decision) {
             this.decision = decision;
         }
 
+        AuthorizationSubject lastSubject() {
+            return lastSubject;
+        }
+
         @Override
         public AuthorizationDecision authorize(AuthorizationSubject subject, KernelAuthorizationOperation operation) {
+            this.lastSubject = subject;
             return decision;
         }
 
@@ -157,6 +175,7 @@ class ModuleStatusAuthorizationIntegrationTest {
             String resourceId,
             Map<String, String> context
         ) {
+            this.lastSubject = subject;
             return decision;
         }
     }

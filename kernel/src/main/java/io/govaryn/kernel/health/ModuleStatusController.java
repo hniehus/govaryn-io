@@ -2,8 +2,8 @@ package io.govaryn.kernel.health;
 
 import io.govaryn.kernel.api.KernelAuthorizationOperations;
 import io.govaryn.kernel.api.KernelAuthorizationService;
-import io.govaryn.kernel.security.KernelSecurityIdentity;
-import io.govaryn.kernel.security.KernelSecurityIdentityResolver;
+import io.govaryn.kernel.security.KernelRequestSecurityContext;
+import io.govaryn.kernel.security.authorization.framework.model.SecurityContext;
 import io.govaryn.kernel.security.authorization.model.AuthorizationDecisionResult;
 import io.govaryn.kernel.security.authorization.model.AuthorizationSubject;
 import org.springframework.http.ResponseEntity;
@@ -21,16 +21,16 @@ import static org.springframework.http.HttpStatus.FORBIDDEN;
 public class ModuleStatusController {
 
     private final ModuleStatusService moduleStatusService;
-    private final KernelSecurityIdentityResolver securityIdentityResolver;
+    private final KernelRequestSecurityContext requestSecurityContext;
     private final KernelAuthorizationService kernelAuthorizationService;
 
     public ModuleStatusController(
         ModuleStatusService moduleStatusService,
-        KernelSecurityIdentityResolver securityIdentityResolver,
+        KernelRequestSecurityContext requestSecurityContext,
         KernelAuthorizationService kernelAuthorizationService
     ) {
         this.moduleStatusService = moduleStatusService;
-        this.securityIdentityResolver = securityIdentityResolver;
+        this.requestSecurityContext = requestSecurityContext;
         this.kernelAuthorizationService = kernelAuthorizationService;
     }
 
@@ -38,18 +38,19 @@ public class ModuleStatusController {
     public ResponseEntity<ModuleStatusResponse> moduleStatus(Authentication authentication) {
         // Security-disabled mode keeps current open behavior for local/dev scenarios.
         if (authentication != null) {
-            enforceModuleStatusReadPermission(authentication);
+            enforceModuleStatusReadPermission();
         }
         return ResponseEntity.ok(moduleStatusService.currentStatus());
     }
 
-    private void enforceModuleStatusReadPermission(Authentication authentication) {
+    private void enforceModuleStatusReadPermission() {
         try {
-            KernelSecurityIdentity identity = securityIdentityResolver.resolve(authentication);
+            SecurityContext securityContext = requestSecurityContext.current()
+                .orElseThrow(() -> new IllegalArgumentException("Authenticated request context is required"));
             AuthorizationSubject subject = new AuthorizationSubject(
-                identity.subject(),
-                List.copyOf(identity.authorities()),
-                Map.of()
+                securityContext.userId(),
+                List.copyOf(securityContext.globalRoles()),
+                Map.copyOf(securityContext.claims())
             );
 
             var decision = kernelAuthorizationService.authorize(

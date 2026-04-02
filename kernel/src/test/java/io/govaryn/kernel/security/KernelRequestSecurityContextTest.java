@@ -66,7 +66,12 @@ class KernelRequestSecurityContextTest {
         GovarynKernelSecurityProperties properties = new GovarynKernelSecurityProperties();
         properties.setAuthorityClaim("roles");
         properties.setAuthorityPrefix("ROLE_");
-        return new KernelSecurityContextFactory(new KernelSecurityIdentityResolver(), properties);
+        return new KernelSecurityContextFactory(
+            new KernelSecurityIdentityResolver(),
+            new KernelTenantScopeExtractor(),
+            new KernelActiveTenantResolver(new KernelTenantAccessValidator()),
+            properties
+        );
     }
 
     private static JwtAuthenticationToken jwtAuthenticationToken(

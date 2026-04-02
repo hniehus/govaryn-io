@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class KernelSecurityContextFactoryTest {
 
@@ -118,11 +119,60 @@ class KernelSecurityContextFactoryTest {
         assertThat(kernelContext.principal().authorities()).containsExactly("ROLE_support");
     }
 
+    @Test
+    void resolvesExplicitRouteTenantForTenantProtectedRequestWhenTenantIsInScope() {
+        KernelSecurityContextFactory factory = newFactory("roles", "ROLE_");
+
+        JwtAuthenticationToken authentication = jwtAuthenticationToken(
+            Map.of(
+                "sub", "user-500",
+                "tenant_ids", List.of("tenant-a", "tenant-b"),
+                "roles", List.of("support")
+            ),
+            List.of("ROLE_support"),
+            "ava"
+        );
+
+        KernelSecurityTenantContext kernelContext = factory.createKernelContext(
+            authentication,
+            "tenant-b",
+            true,
+            false
+        );
+
+        assertThat(kernelContext.activeTenantId()).isEqualTo("tenant-b");
+    }
+
+    @Test
+    void deniesTenantProtectedRequestWithMultiTenantScopeWhenRouteTenantIsMissing() {
+        KernelSecurityContextFactory factory = newFactory("roles", "ROLE_");
+
+        JwtAuthenticationToken authentication = jwtAuthenticationToken(
+            Map.of(
+                "sub", "user-501",
+                "tenant_ids", List.of("tenant-a", "tenant-b"),
+                "roles", List.of("support")
+            ),
+            List.of("ROLE_support"),
+            "kai"
+        );
+
+        assertThatThrownBy(() -> factory.createKernelContext(authentication, null, true, false))
+            .isInstanceOf(KernelTenantResolutionException.class)
+            .extracting(exception -> ((KernelTenantResolutionException) exception).failure())
+            .isEqualTo(KernelTenantResolutionFailure.EXPLICIT_TENANT_SELECTION_REQUIRED);
+    }
+
     private static KernelSecurityContextFactory newFactory(String authorityClaim, String authorityPrefix) {
         GovarynKernelSecurityProperties properties = new GovarynKernelSecurityProperties();
         properties.setAuthorityClaim(authorityClaim);
         properties.setAuthorityPrefix(authorityPrefix);
-        return new KernelSecurityContextFactory(new KernelSecurityIdentityResolver(), properties);
+        return new KernelSecurityContextFactory(
+            new KernelSecurityIdentityResolver(),
+            new KernelTenantScopeExtractor(),
+            new KernelActiveTenantResolver(new KernelTenantAccessValidator()),
+            properties
+        );
     }
 
     private static JwtAuthenticationToken jwtAuthenticationToken(

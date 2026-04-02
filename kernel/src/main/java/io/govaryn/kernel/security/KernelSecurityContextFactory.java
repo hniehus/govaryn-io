@@ -16,23 +16,21 @@ import java.util.regex.Pattern;
 public class KernelSecurityContextFactory {
 
     private static final Pattern TOKEN_SPLIT_PATTERN = Pattern.compile("[,\\s]+");
-    private static final List<String> TENANT_SCOPE_CLAIM_KEYS = List.of(
-        "tenant_scope",
-        "tenantScope",
-        "tenant_ids",
-        "tenantIds",
-        "tenants"
-    );
-    private static final List<String> TENANT_SINGLE_CLAIM_KEYS = List.of("tenant_id", "tenantId", "tid");
 
     private final KernelSecurityIdentityResolver securityIdentityResolver;
+    private final KernelTenantScopeExtractor tenantScopeExtractor;
+    private final KernelActiveTenantResolver activeTenantResolver;
     private final GovarynKernelSecurityProperties securityProperties;
 
     public KernelSecurityContextFactory(
         KernelSecurityIdentityResolver securityIdentityResolver,
+        KernelTenantScopeExtractor tenantScopeExtractor,
+        KernelActiveTenantResolver activeTenantResolver,
         GovarynKernelSecurityProperties securityProperties
     ) {
         this.securityIdentityResolver = securityIdentityResolver;
+        this.tenantScopeExtractor = tenantScopeExtractor;
+        this.activeTenantResolver = activeTenantResolver;
         this.securityProperties = securityProperties;
     }
 
@@ -41,19 +39,35 @@ public class KernelSecurityContextFactory {
     }
 
     public KernelSecurityTenantContext createKernelContext(Authentication authentication) {
+        return createKernelContext(authentication, null, false, false);
+    }
+
+    public KernelSecurityTenantContext createKernelContext(
+        Authentication authentication,
+        String routeTenantId,
+        boolean tenantProtectedOperation,
+        boolean privilegedCrossTenantAccess
+    ) {
         KernelSecurityIdentity identity = securityIdentityResolver.resolve(authentication);
-        TenantScopeResolution tenantResolution = resolveTenantScope(authentication);
-        KernelActiveTenantContext activeTenant = resolveActiveTenant(tenantResolution.scope());
+        KernelTenantScopeExtraction tenantScopeExtraction = tenantScopeExtractor.extract(authentication);
+        KernelActiveTenantContext activeTenant = activeTenantResolver.resolve(
+            new KernelTenantResolutionRequest(
+                tenantScopeExtraction.tenantScope(),
+                routeTenantId,
+                tenantProtectedOperation,
+                privilegedCrossTenantAccess
+            )
+        ).orElse(null);
         Map<String, String> claims = resolveClaims(
             authentication,
-            tenantResolution.sourceClaimKey(),
+            tenantScopeExtraction.sourceClaimKey(),
             activeTenant
         );
         Map<String, String> authenticationMetadata = resolveAuthenticationMetadata(identity, authentication);
 
         return new KernelSecurityTenantContext(
             identity,
-            tenantResolution.scope(),
+            tenantScopeExtraction.tenantScope(),
             activeTenant,
             claims,
             authenticationMetadata
@@ -68,35 +82,6 @@ public class KernelSecurityContextFactory {
             kernelContext.claims(),
             kernelContext.authenticationMetadata()
         );
-    }
-
-    private TenantScopeResolution resolveTenantScope(Authentication authentication) {
-        if (!(authentication instanceof JwtAuthenticationToken jwtAuthenticationToken)) {
-            return new TenantScopeResolution(KernelTenantScope.empty(), null);
-        }
-
-        Map<String, Object> claims = jwtAuthenticationToken.getToken().getClaims();
-        for (String claimKey : TENANT_SCOPE_CLAIM_KEYS) {
-            List<String> scopeValues = normalizeClaimTokens(claims.get(claimKey));
-            if (!scopeValues.isEmpty()) {
-                return new TenantScopeResolution(new KernelTenantScope(scopeValues), claimKey);
-            }
-        }
-
-        for (String claimKey : TENANT_SINGLE_CLAIM_KEYS) {
-            String singleTenantId = claimAsString(claims.get(claimKey));
-            if (hasText(singleTenantId)) {
-                return new TenantScopeResolution(new KernelTenantScope(List.of(singleTenantId)), claimKey);
-            }
-        }
-
-        return new TenantScopeResolution(KernelTenantScope.empty(), null);
-    }
-
-    private KernelActiveTenantContext resolveActiveTenant(KernelTenantScope tenantScope) {
-        return tenantScope.singleTenantId()
-            .map(KernelActiveTenantContext::new)
-            .orElse(null);
     }
 
     private Map<String, String> resolveClaims(
@@ -183,20 +168,7 @@ public class KernelSecurityContextFactory {
             .toList();
     }
 
-    private String claimAsString(Object claimValue) {
-        if (claimValue == null) {
-            return null;
-        }
-        if (claimValue instanceof String claim) {
-            return claim;
-        }
-        return String.valueOf(claimValue);
-    }
-
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
-    }
-
-    private record TenantScopeResolution(KernelTenantScope scope, String sourceClaimKey) {
     }
 }

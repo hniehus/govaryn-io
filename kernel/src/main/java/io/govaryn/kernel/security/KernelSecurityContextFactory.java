@@ -16,7 +16,14 @@ import java.util.regex.Pattern;
 public class KernelSecurityContextFactory {
 
     private static final Pattern TOKEN_SPLIT_PATTERN = Pattern.compile("[,\\s]+");
-    private static final List<String> TENANT_CLAIM_KEYS = List.of("tenant_id", "tenantId", "tid");
+    private static final List<String> TENANT_SCOPE_CLAIM_KEYS = List.of(
+        "tenant_scope",
+        "tenantScope",
+        "tenant_ids",
+        "tenantIds",
+        "tenants"
+    );
+    private static final List<String> TENANT_SINGLE_CLAIM_KEYS = List.of("tenant_id", "tenantId", "tid");
 
     private final KernelSecurityIdentityResolver securityIdentityResolver;
     private final GovarynKernelSecurityProperties securityProperties;
@@ -30,36 +37,73 @@ public class KernelSecurityContextFactory {
     }
 
     public SecurityContext create(Authentication authentication) {
+        return toAuthorizationSecurityContext(createKernelContext(authentication));
+    }
+
+    public KernelSecurityTenantContext createKernelContext(Authentication authentication) {
         KernelSecurityIdentity identity = securityIdentityResolver.resolve(authentication);
-        String tenantId = resolveTenantId(authentication);
-        Map<String, String> claims = resolveClaims(authentication, tenantId);
+        TenantScopeResolution tenantResolution = resolveTenantScope(authentication);
+        KernelActiveTenantContext activeTenant = resolveActiveTenant(tenantResolution.scope());
+        Map<String, String> claims = resolveClaims(
+            authentication,
+            tenantResolution.sourceClaimKey(),
+            activeTenant
+        );
         Map<String, String> authenticationMetadata = resolveAuthenticationMetadata(identity, authentication);
 
-        return new SecurityContext(
-            identity.subject(),
-            tenantId,
-            normalizeAuthorities(identity.authorities()),
+        return new KernelSecurityTenantContext(
+            identity,
+            tenantResolution.scope(),
+            activeTenant,
             claims,
             authenticationMetadata
         );
     }
 
-    private String resolveTenantId(Authentication authentication) {
+    SecurityContext toAuthorizationSecurityContext(KernelSecurityTenantContext kernelContext) {
+        return new SecurityContext(
+            kernelContext.userId(),
+            kernelContext.activeTenantId(),
+            kernelContext.authorities(),
+            kernelContext.claims(),
+            kernelContext.authenticationMetadata()
+        );
+    }
+
+    private TenantScopeResolution resolveTenantScope(Authentication authentication) {
         if (!(authentication instanceof JwtAuthenticationToken jwtAuthenticationToken)) {
-            return null;
+            return new TenantScopeResolution(KernelTenantScope.empty(), null);
         }
 
-        for (String claimKey : TENANT_CLAIM_KEYS) {
-            String value = claimAsString(jwtAuthenticationToken.getToken().getClaims().get(claimKey));
-            if (hasText(value)) {
-                return value.trim();
+        Map<String, Object> claims = jwtAuthenticationToken.getToken().getClaims();
+        for (String claimKey : TENANT_SCOPE_CLAIM_KEYS) {
+            List<String> scopeValues = normalizeClaimTokens(claims.get(claimKey));
+            if (!scopeValues.isEmpty()) {
+                return new TenantScopeResolution(new KernelTenantScope(scopeValues), claimKey);
             }
         }
 
-        return null;
+        for (String claimKey : TENANT_SINGLE_CLAIM_KEYS) {
+            String singleTenantId = claimAsString(claims.get(claimKey));
+            if (hasText(singleTenantId)) {
+                return new TenantScopeResolution(new KernelTenantScope(List.of(singleTenantId)), claimKey);
+            }
+        }
+
+        return new TenantScopeResolution(KernelTenantScope.empty(), null);
     }
 
-    private Map<String, String> resolveClaims(Authentication authentication, String tenantId) {
+    private KernelActiveTenantContext resolveActiveTenant(KernelTenantScope tenantScope) {
+        return tenantScope.singleTenantId()
+            .map(KernelActiveTenantContext::new)
+            .orElse(null);
+    }
+
+    private Map<String, String> resolveClaims(
+        Authentication authentication,
+        String tenantClaimKey,
+        KernelActiveTenantContext activeTenant
+    ) {
         if (!(authentication instanceof JwtAuthenticationToken jwtAuthenticationToken)) {
             return Map.of();
         }
@@ -67,9 +111,8 @@ public class KernelSecurityContextFactory {
         Map<String, Object> jwtClaims = jwtAuthenticationToken.getToken().getClaims();
         Map<String, String> claims = new LinkedHashMap<>();
 
-        if (hasText(tenantId)) {
-            String tenantClaimKey = resolveTenantClaimKey(jwtClaims);
-            claims.put(tenantClaimKey == null ? "tenant_id" : tenantClaimKey, tenantId.trim());
+        if (activeTenant != null) {
+            claims.put(hasText(tenantClaimKey) ? tenantClaimKey.trim() : "tenant_id", activeTenant.tenantId());
         }
 
         addNormalizedClaim(claims, "scope", jwtClaims.get("scope"));
@@ -94,19 +137,6 @@ public class KernelSecurityContextFactory {
         return Map.copyOf(metadata);
     }
 
-    private List<String> normalizeAuthorities(List<String> authorities) {
-        if (authorities == null || authorities.isEmpty()) {
-            return List.of();
-        }
-
-        return authorities.stream()
-            .filter(this::hasText)
-            .map(String::trim)
-            .distinct()
-            .sorted()
-            .toList();
-    }
-
     private void addNormalizedClaim(Map<String, String> claims, String claimKey, Object claimValue) {
         if (!hasText(claimKey)) {
             return;
@@ -117,18 +147,18 @@ public class KernelSecurityContextFactory {
         }
     }
 
-    private String resolveTenantClaimKey(Map<String, Object> claims) {
-        for (String claimKey : TENANT_CLAIM_KEYS) {
-            if (claims.containsKey(claimKey)) {
-                return claimKey;
-            }
+    private String normalizeClaimValue(Object rawValue) {
+        List<String> tokens = normalizeClaimTokens(rawValue);
+        if (tokens.isEmpty()) {
+            return null;
         }
-        return null;
+
+        return String.join(" ", tokens);
     }
 
-    private String normalizeClaimValue(Object rawValue) {
+    private List<String> normalizeClaimTokens(Object rawValue) {
         if (rawValue == null) {
-            return null;
+            return List.of();
         }
 
         Collection<String> tokens = switch (rawValue) {
@@ -143,19 +173,14 @@ public class KernelSecurityContextFactory {
                 .filter(this::hasText)
                 .map(String::trim)
                 .toList();
-            default -> List.of(rawValue.toString());
+            default -> List.of(rawValue.toString().trim());
         };
-
-        if (tokens.isEmpty()) {
-            return null;
-        }
 
         return tokens.stream()
             .filter(this::hasText)
             .distinct()
             .sorted()
-            .reduce((left, right) -> left + " " + right)
-            .orElse(null);
+            .toList();
     }
 
     private String claimAsString(Object claimValue) {
@@ -170,5 +195,8 @@ public class KernelSecurityContextFactory {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private record TenantScopeResolution(KernelTenantScope scope, String sourceClaimKey) {
     }
 }

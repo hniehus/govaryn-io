@@ -39,6 +39,23 @@ class KernelRequestSecurityContextTest {
     }
 
     @Test
+    void exposesKernelSecurityTenantContextForAuthenticatedRequest() {
+        KernelRequestSecurityContext requestSecurityContext = new KernelRequestSecurityContext(newFactory());
+        SecurityContextHolder.getContext().setAuthentication(jwtAuthenticationToken(
+            Map.of("sub", "subject-1", "tenant_id", "tenant-a", "roles", List.of("admin")),
+            List.of("ROLE_admin"),
+            "alice"
+        ));
+
+        var current = requestSecurityContext.currentKernelContext();
+
+        assertThat(current).isPresent();
+        assertThat(current.get().userId()).isEqualTo("subject-1");
+        assertThat(current.get().tenantScope().permittedTenantIds()).containsExactly("tenant-a");
+        assertThat(current.get().activeTenantId()).isEqualTo("tenant-a");
+    }
+
+    @Test
     void returnsEmptyWhenNoAuthenticationExists() {
         KernelRequestSecurityContext requestSecurityContext = new KernelRequestSecurityContext(newFactory());
 

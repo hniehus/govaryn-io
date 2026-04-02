@@ -96,6 +96,28 @@ class KernelSecurityContextFactoryTest {
             .containsEntry("roles", "admin support");
     }
 
+    @Test
+    void mapsTenantScopeAndLeavesActiveTenantUnsetWhenMultipleTenantsAreGranted() {
+        KernelSecurityContextFactory factory = newFactory("roles", "ROLE_");
+
+        JwtAuthenticationToken authentication = jwtAuthenticationToken(
+            Map.of(
+                "sub", "user-314",
+                "tenant_ids", List.of("tenant-b", "tenant-a", "tenant-b"),
+                "roles", List.of("support")
+            ),
+            List.of("ROLE_support"),
+            "mia"
+        );
+
+        KernelSecurityTenantContext kernelContext = factory.createKernelContext(authentication);
+
+        assertThat(kernelContext.tenantScope().permittedTenantIds()).containsExactly("tenant-a", "tenant-b");
+        assertThat(kernelContext.activeTenant()).isNull();
+        assertThat(kernelContext.principal().subject()).isEqualTo("user-314");
+        assertThat(kernelContext.principal().authorities()).containsExactly("ROLE_support");
+    }
+
     private static KernelSecurityContextFactory newFactory(String authorityClaim, String authorityPrefix) {
         GovarynKernelSecurityProperties properties = new GovarynKernelSecurityProperties();
         properties.setAuthorityClaim(authorityClaim);

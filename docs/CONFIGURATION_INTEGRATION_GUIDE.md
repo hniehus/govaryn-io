@@ -384,19 +384,19 @@ public void validateConfiguration(Map<String, Object> config) throws Configurati
 2. **Register custom pattern:** If using non-standard names, register a pattern
 3. **Use `getAll()` method:** Only `getAll()` returns redacted config
 
-### Module configuration not accessible to other modules
-
-**Expected behavior:** Each module sees only its own namespace.
+### Module configuration includes unexpected keys
 
 ```java
-// Module A can only see "govaryn.modulea.*"
+// Returns only keys that match the requested prefix
 configManager.getNamespacedConfiguration("govaryn.modulea");
 
-// Module A cannot access "govaryn.moduleb.*"
-// This is by design for isolation
+// If you request another namespace, those keys are returned
+configManager.getNamespacedConfiguration("govaryn.moduleb");
 ```
 
-If cross-module configuration is needed, put the setting in a shared namespace and document it clearly.
+`ConfigurationManager` performs prefix filtering based on the namespace argument. It does not enforce caller identity at this layer.
+
+Use team/module conventions to ensure each module requests only its own namespace.
 
 ## Testing Configuration
 
@@ -438,7 +438,6 @@ class MyModuleIntegrationTest {
 
 ## See Also
 
-- [Configuration Management Architecture](../docs/CONFIGURATION_MANAGEMENT.md) — Deep dive into design and implementation
-- [KernelModule API](./api/KernelModule.java) — Module lifecycle and initialization
-- [SecretRedactor](./config/SecretRedactor.java) — Secret detection and redaction
-
+- [Configuration Management Architecture](./CONFIGURATION_MANAGEMENT.md) — Deep dive into design and implementation
+- [KernelModule API](../kernel/src/main/java/io/govaryn/kernel/api/KernelModule.java) — Module lifecycle and initialization
+- [SecretRedactor](../kernel/src/main/java/io/govaryn/kernel/config/SecretRedactor.java) — Secret detection and redaction

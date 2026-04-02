@@ -1,113 +1,99 @@
-# Govaryn IO
+# Configuration Management Architecture
 
-Govaryn IO is a portfolio decision & governance system: **strategy → investment → capacity → delivery reality → value** — with **audit-grade traceability**.
+This document is the canonical architecture/reference for kernel configuration behavior.
 
-If you like building systems where correctness, boundaries, and evidence matter more than dashboards and guesswork, you’ll feel at home here.
+For task-oriented usage, see:
+- [Configuration Management Quick Reference](./CONFIGURATION_QUICK_REFERENCE.md)
+- [Configuration Management Integration Guide](./CONFIGURATION_INTEGRATION_GUIDE.md)
+- [Configuration Management Diagrams](./CONFIGURATION_DIAGRAMS.md)
 
----
+## Scope
 
-## What this repo is
+The kernel configuration system provides:
+- centralized schema-driven configuration validation
+- deterministic merge precedence across defaults, property files, and environment variables
+- module schema registration and validation at startup
+- secret redaction for diagnostic/log-safe views
 
-This repository contains:
+Primary implementation classes:
+- [`ConfigurationManager`](../kernel/src/main/java/io/govaryn/kernel/config/ConfigurationManager.java)
+- [`ConfigurationValidator`](../kernel/src/main/java/io/govaryn/kernel/config/ConfigurationValidator.java)
+- [`KernelConfigurationSchema`](../kernel/src/main/java/io/govaryn/kernel/config/KernelConfigurationSchema.java)
+- [`ModuleConfigurationSchema`](../kernel/src/main/java/io/govaryn/kernel/config/ModuleConfigurationSchema.java)
+- [`SecretRedactor`](../kernel/src/main/java/io/govaryn/kernel/config/SecretRedactor.java)
 
-- a **modular Spring Boot** application (classic 3-layer, organized as a modular monolith)
-- **Rust compute services** for heavy optimization/simulation workloads
-- a **Helm chart** for self-hosting
-- **Ansible** for SaaS provisioning/configuration
+## Startup lifecycle
 
-The guiding idea: **keep business truth in one place**, keep compute fast and replaceable, and make decisions explainable months later.
+Configuration initialization happens during kernel startup:
+1. Spring Boot starts application context.
+2. Module schemas are registered through `ConfigurationManager.registerModule(...)`.
+3. `ConfigurationManager.initialize()` runs (see [`KernelApplication`](../kernel/src/main/java/io/govaryn/kernel/KernelApplication.java)).
+4. Configuration is loaded, merged, and validated.
+5. Startup fails fast (`System.exit(1)`) if validation fails.
 
----
+## Merge precedence
 
-## Principles (the stuff we don’t compromise on)
+Configuration values are merged with strict precedence:
 
-### Tenant isolation by construction
-No “remember to add tenant_id”. Tenant boundaries are enforced as a default, not a convention.
+1. Schema defaults (lowest precedence)
+2. Spring `Environment` property sources (for example `application.properties`)
+3. Environment variables (highest precedence)
 
-### Append-only audit trail
-Decision-grade objects have a history that can’t be hand-waved away. You can tell *who changed what, when, and why*.
+Environment variable mapping uses upper snake case:
+- `govaryn.kernel.id` -> `GOVARYN_KERNEL_ID`
+- `govaryn.modulex.api.key` -> `GOVARYN_MODULEX_API_KEY`
 
-### Evidence-based status
-Whenever possible, the system should reflect delivery reality through integrations and facts — not manual traffic lights.
+## Validation model
 
-### Compute services are not the source of truth
-Rust services do compute. The authoritative business state stays in the core system.
+Validation is schema driven:
+- required key checks
+- type checks (`STRING`, `ENUM`)
+- strict enum value validation for strict keys
+- module namespace key ownership checks
+- optional module-specific custom validation (`validateConfiguration(...)`)
 
----
+Validation failure behavior:
+- all detected errors are aggregated
+- a `ConfigurationException` is thrown
+- kernel startup is aborted
 
-## Architecture at a glance
+## Namespacing behavior
 
-- **Java (latest LTS)** + **Spring Boot (latest)**, pinned centrally via a parent POM
-- **Maven multi-module**
-- **Rust workspace** for compute-only services
-- “Modular monolith” approach: module boundaries and contracts matter; deployment stays simple
+Modules define their own namespace (for example `govaryn.payments`) via `ModuleConfigurationSchema`.
 
----
+`ConfigurationManager.getNamespacedConfiguration(namespace)` returns keys matching the requested prefix.
 
-## Repository layout
+Important:
+- this is filtering behavior, not caller-identity enforcement
+- modules/services should request only their own namespace by convention
+- cross-module access restrictions are not enforced in this layer
 
-```text
-apps/api                      Spring Boot API
-platform/*                    cross-cutting modules (identity, tenancy, audit, i18n, ...)
-domains/*                     business modules (strategy, funding, capacity, dependencies, ...)
-rust-services/*               compute-only services
-infra/helm/govaryn            self-hosting Helm chart
-infra/ansible                 SaaS provisioning/config (Ansible)
-docs                          ADRs, security, compliance
-```
+## Secret redaction
 
----
+`SecretRedactor` protects log/diagnostic output:
+- `ConfigurationManager.getAll()` returns redacted values
+- `ConfigurationManager.getAllUnredacted()` returns raw values (internal use only)
+- default secret patterns include keys containing values like `password`, `secret`, `token`, `apikey`, `credential`, and `auth`
+- custom patterns can be registered with `SecretRedactor.registerSecretPattern(...)`
 
-## Quickstart (development)
+## Kernel schema (current keys)
 
-### 1) Initialize the Maven wrapper (recommended)
+Kernel-level keys are defined in [`KernelConfigurationSchema`](../kernel/src/main/java/io/govaryn/kernel/config/KernelConfigurationSchema.java):
+- `govaryn.kernel.id` (required)
+- `govaryn.kernel.environment` (required enum: `DEV|STAGE|PROD`)
+- `govaryn.kernel.module.mode` (enum; default `CLASSPATH`)
+- `govaryn.kernel.module.plugin-directory` (default `./plugins`)
+- `govaryn.kernel.module.failure-policy.initialization` (enum; default `REJECT_MODULE_CONTINUE`)
 
-```bash
-./scripts/mvnw-init.sh
-```
+## Design constraints
 
-### 2) Build & test
+- Startup-time initialization only (no runtime dynamic reload in this layer).
+- Validation fails closed at startup.
+- Keep schemas explicit and key ownership clear.
+- Do not log unredacted secrets.
 
-```bash
-mvn -B -ntp clean test
-# or: ./mvnw -B -ntp clean test
-```
+## Related docs
 
-### 3) Run the API
-
-```bash
-mvn -pl apps/api spring-boot:run
-# API:    http://localhost:8080
-# Health: http://localhost:8080/actuator/health
-```
-
----
-
-## Self-hosting (Helm)
-
-The Helm chart lives at `infra/helm/govaryn`.
-
-```bash
-helm upgrade --install govaryn infra/helm/govaryn -n govaryn --create-namespace
-```
-
-**Important:** the included Postgres manifest is a placeholder. For a real install, use a proper Postgres chart/StatefulSet with PVCs, backups, and secrets management.
-
----
-
-## How to contribute
-
-If you want to contribute, start here:
-
-- Read **CONTRIBUTING.md**
-- Browse **docs/** for ADRs and constraints
-- Pick something small first (docs, tests, a tight bug fix) and get a feel for the module boundaries
-
-Blunt truth: PRs that break tenant safety, ignore module boundaries, or ship without tests won’t make it in — and that’s intentional.
-
----
-
-## Project notes
-
-- This README is intentionally plain-spoken. If something is unclear, open an issue or improve the docs.
-- If you’re proposing a change that affects architecture, interfaces, or module boundaries: write an ADR. Future you will be grateful.
+- [Configuration Management Quick Reference](./CONFIGURATION_QUICK_REFERENCE.md)
+- [Configuration Management Integration Guide](./CONFIGURATION_INTEGRATION_GUIDE.md)
+- [Configuration Management Diagrams](./CONFIGURATION_DIAGRAMS.md)

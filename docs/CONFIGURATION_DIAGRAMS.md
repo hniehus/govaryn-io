@@ -127,49 +127,27 @@
                └──────────────────────┘
 ```
 
-## Module Configuration Isolation
+## Namespace Filtering Behavior
+
+`ConfigurationManager.getNamespacedConfiguration(namespace)` filters keys by prefix.
 
 ```
-┌─────────────────────────────────────────────────────┐
-│         ConfigurationManager.initialize()            │
-│                                                     │
-│  ┌────────────────────────────────────────────────┐ │
-│  │ ALL Loaded Configuration                       │ │
-│  │                                                │ │
-│  │ govaryn.kernel.id = "prod-01"                 │ │
-│  │ govaryn.kernel.environment = "PROD"           │ │
-│  │ govaryn.kernel.module.mode = "CLASSPATH"      │ │
-│  │ govaryn.moduleA.enabled = "true"              │ │
-│  │ govaryn.moduleA.db.host = "postgres.internal" │ │
-│  │ govaryn.moduleA.db.password = "secret1"       │ │
-│  │ govaryn.moduleB.enabled = "false"             │ │
-│  │ govaryn.moduleB.api.endpoint = "https://..."  │ │
-│  │ govaryn.moduleB.api.token = "secret2"         │ │
-│  └────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────┘
-                    │
-        ┌───────────┼───────────┐
-        │           │           │
-        ▼           ▼           ▼
-   ┌─────────┐ ┌─────────┐ ┌─────────┐
-   │ Kernel  │ │Module A │ │Module B │
-   │         │ │         │ │         │
-   │ Sees:   │ │ Sees:   │ │ Sees:   │
-   │         │ │         │ │         │
-   │ • kernel│ │ • moduleA   │ • moduleB   │
-   │ • id    │ │ • enabled   │ • enabled   │
-   │ • env   │ │ • db.host   │ • api.end.. │
-   │ • mode  │ │ • db.pass.. │ • api.token │
-   │         │ │         │ │         │
-   │ CANNOT  │ │ CANNOT  │ │ CANNOT  │
-   │ See:    │ │ See:    │ │ See:    │
-   │         │ │         │ │         │
-   │ • moduleA   │ • kernel   │ • kernel    │
-   │   config    │   config   │   config    │
-   │ • moduleB   │ • moduleB  │ • moduleA   │
-   │   config    │   config   │   config    │
-   └─────────┘ └─────────┘ └─────────┘
+ALL KEYS IN MERGED MAP
+  govaryn.kernel.id
+  govaryn.kernel.environment
+  govaryn.modulea.enabled
+  govaryn.modulea.db.password
+  govaryn.moduleb.enabled
+  govaryn.moduleb.api.token
+           │
+           │ getNamespacedConfiguration("govaryn.modulea")
+           ▼
+RETURNS
+  govaryn.modulea.enabled
+  govaryn.modulea.db.password
 ```
+
+Note: filtering is based on the requested namespace argument. Caller identity enforcement is not implemented in this layer.
 
 ## Secret Redaction Flow
 
@@ -329,7 +307,6 @@
 ---
 
 For more details, see:
-- **CONFIGURATION_MANAGEMENT.md** — Architecture and design
-- **CONFIGURATION_INTEGRATION_GUIDE.md** — Developer integration guide
-- **IMPLEMENTATION_SUMMARY.md** — Complete implementation details
-
+- [Configuration Management Architecture](./CONFIGURATION_MANAGEMENT.md)
+- [Configuration Management Integration Guide](./CONFIGURATION_INTEGRATION_GUIDE.md)
+- [Configuration Management Quick Reference](./CONFIGURATION_QUICK_REFERENCE.md)

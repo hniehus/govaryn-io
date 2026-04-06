@@ -109,6 +109,72 @@ class KernelStandardRecordAuthorizationIntegrationTest {
         assertThat(afterCount).isEqualTo(beforeCount);
     }
 
+    @Test
+    @DisplayName("Tenant-scoped persistence prevents cross-tenant read and write access")
+    void tenantScopedPersistencePreventsCrossTenantReadAndWriteAccess() throws Exception {
+        int tenant1Before = listCount("allow-token");
+        int tenant2Before = listCount("allow-tenant2-token");
+
+        String tenant1RecordId = createRecord("allow-token", "tenant-1-value");
+        String tenant2RecordId = createRecord("allow-tenant2-token", "tenant-2-value");
+
+        assertThat(listCount("allow-token")).isEqualTo(tenant1Before + 1);
+        assertThat(listCount("allow-tenant2-token")).isEqualTo(tenant2Before + 1);
+
+        mockMvc.perform(get("/api/kernel/records/" + tenant1RecordId)
+                .header("Authorization", "Bearer allow-tenant2-token"))
+            .andExpect(status().isNotFound());
+
+        mockMvc.perform(put("/api/kernel/records/" + tenant1RecordId)
+                .header("Authorization", "Bearer allow-tenant2-token")
+                .contentType(APPLICATION_JSON)
+                .content("{\"value\":\"cross-tenant-update\"}"))
+            .andExpect(status().isNotFound());
+
+        mockMvc.perform(delete("/api/kernel/records/" + tenant1RecordId)
+                .header("Authorization", "Bearer allow-tenant2-token"))
+            .andExpect(status().isNotFound());
+
+        mockMvc.perform(get("/api/kernel/records/" + tenant1RecordId)
+                .header("Authorization", "Bearer allow-token"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.value").value("tenant-1-value"));
+
+        mockMvc.perform(get("/api/kernel/records/" + tenant2RecordId)
+                .header("Authorization", "Bearer allow-token"))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Tenant-protected record path fails closed for multi-tenant token without explicit tenant selector")
+    void tenantProtectedRecordPathFailsClosedForMultiTenantTokenWithoutExplicitTenantSelector() throws Exception {
+        mockMvc.perform(get("/api/kernel/records").header("Authorization", "Bearer multi-tenant-token"))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+            .andExpect(jsonPath("$.reason").value("ACCESS_DENIED"));
+
+        mockMvc.perform(post("/api/kernel/records")
+                .header("Authorization", "Bearer multi-tenant-token")
+                .contentType(APPLICATION_JSON)
+                .content("{\"value\":\"blocked\"}"))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+            .andExpect(jsonPath("$.reason").value("ACCESS_DENIED"));
+    }
+
+    private String createRecord(String token, String value) throws Exception {
+        MvcResult createResult = mockMvc.perform(post("/api/kernel/records")
+                .header("Authorization", "Bearer " + token)
+                .contentType(APPLICATION_JSON)
+                .content("{\"value\":\"" + value + "\"}"))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.id").exists())
+            .andReturn();
+
+        return new JsonPathExpectationsHelper("$.id")
+            .evaluateJsonPath(createResult.getResponse().getContentAsString(), String.class);
+    }
+
     private int listCount(String token) throws Exception {
         MvcResult result = mockMvc.perform(get("/api/kernel/records")
                 .header("Authorization", "Bearer " + token))
@@ -145,6 +211,26 @@ class KernelStandardRecordAuthorizationIntegrationTest {
                     "module.status:read",
                     "tenant-2"
                 );
+                case "allow-tenant2-token" -> jwt(
+                    token,
+                    "subject-allow-tenant2",
+                    "https://idp.example.com/realms/main",
+                    List.of("govaryn-kernel"),
+                    "charlie",
+                    List.of("admin"),
+                    "kernel.records.read kernel.records.write",
+                    "tenant-2"
+                );
+                case "multi-tenant-token" -> jwt(
+                    token,
+                    "subject-multi",
+                    "https://idp.example.com/realms/main",
+                    List.of("govaryn-kernel"),
+                    "diana",
+                    List.of("admin"),
+                    "kernel.records.read kernel.records.write",
+                    List.of("tenant-1", "tenant-2")
+                );
                 default -> jwt(
                     token,
                     "subject-default",
@@ -177,6 +263,31 @@ class KernelStandardRecordAuthorizationIntegrationTest {
                 .claim("roles", roles)
                 .claim("scope", scope)
                 .claim("tenant_id", tenantId)
+                .issuedAt(Instant.now().minusSeconds(5))
+                .notBefore(Instant.now().minusSeconds(5))
+                .expiresAt(Instant.now().plusSeconds(300))
+                .build();
+        }
+
+        private static Jwt jwt(
+            String token,
+            String subject,
+            String issuer,
+            List<String> audience,
+            String username,
+            List<String> roles,
+            String scope,
+            List<String> tenantIds
+        ) {
+            return Jwt.withTokenValue(token)
+                .header("alg", "none")
+                .claim("sub", subject)
+                .claim("iss", issuer)
+                .claim("aud", audience)
+                .claim("preferred_username", username)
+                .claim("roles", roles)
+                .claim("scope", scope)
+                .claim("tenant_ids", tenantIds)
                 .issuedAt(Instant.now().minusSeconds(5))
                 .notBefore(Instant.now().minusSeconds(5))
                 .expiresAt(Instant.now().plusSeconds(300))

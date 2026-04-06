@@ -3,10 +3,14 @@ package io.govaryn.kernel.security;
 import io.govaryn.kernel.config.GovarynKernelSecurityProperties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.Instant;
 import java.util.List;
@@ -19,6 +23,7 @@ class KernelRequestSecurityContextTest {
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+        RequestContextHolder.resetRequestAttributes();
     }
 
     @Test
@@ -59,6 +64,41 @@ class KernelRequestSecurityContextTest {
     void returnsEmptyWhenNoAuthenticationExists() {
         KernelRequestSecurityContext requestSecurityContext = new KernelRequestSecurityContext(newFactory());
 
+        assertThat(requestSecurityContext.current()).isEmpty();
+    }
+
+    @Test
+    void returnsRequestCachedKernelContextWhenAvailable() {
+        KernelRequestSecurityContext requestSecurityContext = new KernelRequestSecurityContext(newFactory());
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        KernelSecurityTenantContext cachedContext = new KernelSecurityTenantContext(
+            new KernelSecurityIdentity("subject-10", "https://issuer.example.com", "alex", List.of("ROLE_support")),
+            new KernelTenantScope(List.of("tenant-a", "tenant-b")),
+            new KernelActiveTenantContext("tenant-b"),
+            Map.of("scope", "records:read"),
+            Map.of("authenticationType", "JwtAuthenticationToken")
+        );
+        request.setAttribute(KernelRequestSecurityContext.KERNEL_CONTEXT_REQUEST_ATTRIBUTE, cachedContext);
+
+        KernelSecurityTenantContext first = requestSecurityContext.currentKernelContext().orElseThrow();
+        KernelSecurityTenantContext second = requestSecurityContext.currentKernelContext().orElseThrow();
+
+        assertThat(first).isSameAs(cachedContext);
+        assertThat(second).isSameAs(cachedContext);
+    }
+
+    @Test
+    void returnsEmptyForAnonymousAuthentication() {
+        KernelRequestSecurityContext requestSecurityContext = new KernelRequestSecurityContext(newFactory());
+        SecurityContextHolder.getContext().setAuthentication(new AnonymousAuthenticationToken(
+            "key",
+            "anonymousUser",
+            List.of(new SimpleGrantedAuthority("ROLE_ANONYMOUS"))
+        ));
+
+        assertThat(requestSecurityContext.currentKernelContext()).isEmpty();
         assertThat(requestSecurityContext.current()).isEmpty();
     }
 

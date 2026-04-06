@@ -20,17 +20,20 @@ public class KernelSecurityContextFactory {
     private final KernelSecurityIdentityResolver securityIdentityResolver;
     private final KernelTenantScopeExtractor tenantScopeExtractor;
     private final KernelActiveTenantResolver activeTenantResolver;
+    private final KernelPrivilegedTenantAccessEvaluator privilegedTenantAccessEvaluator;
     private final GovarynKernelSecurityProperties securityProperties;
 
     public KernelSecurityContextFactory(
         KernelSecurityIdentityResolver securityIdentityResolver,
         KernelTenantScopeExtractor tenantScopeExtractor,
         KernelActiveTenantResolver activeTenantResolver,
+        KernelPrivilegedTenantAccessEvaluator privilegedTenantAccessEvaluator,
         GovarynKernelSecurityProperties securityProperties
     ) {
         this.securityIdentityResolver = securityIdentityResolver;
         this.tenantScopeExtractor = tenantScopeExtractor;
         this.activeTenantResolver = activeTenantResolver;
+        this.privilegedTenantAccessEvaluator = privilegedTenantAccessEvaluator;
         this.securityProperties = securityProperties;
     }
 
@@ -39,10 +42,20 @@ public class KernelSecurityContextFactory {
     }
 
     public KernelSecurityTenantContext createKernelContext(Authentication authentication) {
-        return createKernelContext(authentication, null, false, false);
+        return createKernelContext(authentication, null, false);
     }
 
     public KernelSecurityTenantContext createKernelContext(
+        Authentication authentication,
+        String routeTenantId,
+        boolean tenantProtectedOperation
+    ) {
+        boolean privilegedCrossTenantAccess = privilegedTenantAccessEvaluator
+            .hasPrivilegedCrossTenantAccess(authentication);
+        return createKernelContext(authentication, routeTenantId, tenantProtectedOperation, privilegedCrossTenantAccess);
+    }
+
+    private KernelSecurityTenantContext createKernelContext(
         Authentication authentication,
         String routeTenantId,
         boolean tenantProtectedOperation,

@@ -26,6 +26,17 @@ public class KernelTenantAccessValidator {
             throw new IllegalArgumentException("routeTenantId must not be blank");
         }
 
+        if (tenantScope.isEmpty()) {
+            log.warn(
+                "event=tenant_access_scope_bypass_denied routeTenantId={} permittedTenantCount=0 reason=token_scope_empty",
+                sanitizeForLog(normalizedRouteTenantId)
+            );
+            throw new KernelTenantResolutionException(
+                KernelTenantResolutionFailure.REQUESTED_TENANT_NOT_PERMITTED,
+                "Requested route tenant is not within token-granted tenant scope"
+            );
+        }
+
         if (tenantScope.permits(normalizedRouteTenantId)) {
             return;
         }
@@ -33,7 +44,7 @@ public class KernelTenantAccessValidator {
         if (privilegedCrossTenantAccess) {
             log.info(
                 "event=tenant_access_scope_bypass_allowed routeTenantId={} permittedTenantCount={} reason=privileged_cross_tenant_authority",
-                normalizedRouteTenantId,
+                sanitizeForLog(normalizedRouteTenantId),
                 tenantScope.permittedTenantIds().size()
             );
             return;
@@ -41,7 +52,7 @@ public class KernelTenantAccessValidator {
 
         log.warn(
             "event=tenant_access_scope_bypass_denied routeTenantId={} permittedTenantCount={} reason=requested_tenant_not_permitted",
-            normalizedRouteTenantId,
+            sanitizeForLog(normalizedRouteTenantId),
             tenantScope.permittedTenantIds().size()
         );
 
@@ -57,5 +68,19 @@ public class KernelTenantAccessValidator {
         }
         String normalized = value.trim();
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    private String sanitizeForLog(String value) {
+        if (value == null) {
+            return "none";
+        }
+        String normalized = value
+            .replace('\n', '_')
+            .replace('\r', '_')
+            .replace('\t', '_');
+        if (normalized.length() <= 128) {
+            return normalized;
+        }
+        return normalized.substring(0, 128);
     }
 }

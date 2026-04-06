@@ -38,6 +38,16 @@ class KernelTenantAccessValidatorTest {
     }
 
     @Test
+    void deniesExplicitTenantWhenTokenScopeIsEmptyEvenIfPrivilegedCrossTenantAccessIsPresent() {
+        KernelTenantScope scope = KernelTenantScope.empty();
+
+        assertThatThrownBy(() -> validator.validateExplicitTenantAccess(scope, "tenant-z", true))
+            .isInstanceOf(KernelTenantResolutionException.class)
+            .extracting(exception -> ((KernelTenantResolutionException) exception).failure())
+            .isEqualTo(KernelTenantResolutionFailure.REQUESTED_TENANT_NOT_PERMITTED);
+    }
+
+    @Test
     void rejectsBlankRouteTenantForExplicitValidation() {
         KernelTenantScope scope = new KernelTenantScope(List.of("tenant-a"));
 

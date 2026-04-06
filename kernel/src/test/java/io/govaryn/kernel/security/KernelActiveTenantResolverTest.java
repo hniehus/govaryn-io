@@ -117,6 +117,21 @@ class KernelActiveTenantResolverTest {
     }
 
     @Test
+    void deniesExplicitRouteTenantWhenTokenScopeIsEmptyEvenIfPrivilegedCrossTenantAccessIsPresent() {
+        KernelTenantResolutionRequest request = new KernelTenantResolutionRequest(
+            KernelTenantScope.empty(),
+            "tenant-z",
+            true,
+            true
+        );
+
+        assertThatThrownBy(() -> resolver.resolve(request))
+            .isInstanceOf(KernelTenantResolutionException.class)
+            .extracting(exception -> ((KernelTenantResolutionException) exception).failure())
+            .isEqualTo(KernelTenantResolutionFailure.REQUESTED_TENANT_NOT_PERMITTED);
+    }
+
+    @Test
     void privilegedCrossTenantAccessStillRequiresExplicitRouteTenant() {
         KernelTenantResolutionRequest request = new KernelTenantResolutionRequest(
             new KernelTenantScope(List.of("tenant-a", "tenant-b")),

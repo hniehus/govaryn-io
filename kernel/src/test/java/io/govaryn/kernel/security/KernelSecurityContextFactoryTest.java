@@ -136,8 +136,7 @@ class KernelSecurityContextFactoryTest {
         KernelSecurityTenantContext kernelContext = factory.createKernelContext(
             authentication,
             "tenant-b",
-            true,
-            false
+            true
         );
 
         assertThat(kernelContext.activeTenantId()).isEqualTo("tenant-b");
@@ -157,7 +156,7 @@ class KernelSecurityContextFactoryTest {
             "kai"
         );
 
-        assertThatThrownBy(() -> factory.createKernelContext(authentication, null, true, false))
+        assertThatThrownBy(() -> factory.createKernelContext(authentication, null, true))
             .isInstanceOf(KernelTenantResolutionException.class)
             .extracting(exception -> ((KernelTenantResolutionException) exception).failure())
             .isEqualTo(KernelTenantResolutionFailure.EXPLICIT_TENANT_SELECTION_REQUIRED);
@@ -180,13 +179,31 @@ class KernelSecurityContextFactoryTest {
         KernelSecurityTenantContext kernelContext = factory.createKernelContext(
             authentication,
             "tenant-z",
-            true,
             true
         );
 
         assertThat(kernelContext.activeTenantId()).isEqualTo("tenant-z");
         assertThat(kernelContext.tenantScope().permittedTenantIds()).containsExactly("tenant-a");
         assertThat(kernelContext.privilegedCrossTenantAccess()).isTrue();
+    }
+
+    @Test
+    void deniesPrivilegedExplicitCrossTenantSelectionWhenTokenScopeIsEmpty() {
+        KernelSecurityContextFactory factory = newFactory("roles", "ROLE_");
+
+        JwtAuthenticationToken authentication = jwtAuthenticationToken(
+            Map.of(
+                "sub", "user-888",
+                "roles", List.of("admin", "tenant_cross_access")
+            ),
+            List.of("ROLE_admin", KernelPrivilegedTenantAccessEvaluator.CROSS_TENANT_AUTHORITY),
+            "privileged-user"
+        );
+
+        assertThatThrownBy(() -> factory.createKernelContext(authentication, "tenant-z", true))
+            .isInstanceOf(KernelTenantResolutionException.class)
+            .extracting(exception -> ((KernelTenantResolutionException) exception).failure())
+            .isEqualTo(KernelTenantResolutionFailure.REQUESTED_TENANT_NOT_PERMITTED);
     }
 
     private static KernelSecurityContextFactory newFactory(String authorityClaim, String authorityPrefix) {
@@ -197,6 +214,7 @@ class KernelSecurityContextFactoryTest {
             new KernelSecurityIdentityResolver(),
             new KernelTenantScopeExtractor(),
             new KernelActiveTenantResolver(new KernelTenantAccessValidator()),
+            new KernelPrivilegedTenantAccessEvaluator(properties),
             properties
         );
     }

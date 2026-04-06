@@ -21,22 +21,19 @@ public class KernelRequestTenantContextInterceptor implements HandlerInterceptor
     private final KernelRequestSecurityContext requestSecurityContext;
     private final KernelSecurityContextFactory securityContextFactory;
     private final KernelRouteTenantSelectionResolver routeTenantSelectionResolver;
-    private final KernelPrivilegedTenantAccessEvaluator privilegedTenantAccessEvaluator;
 
     public KernelRequestTenantContextInterceptor(
         KernelRequestSecurityContext requestSecurityContext,
         KernelSecurityContextFactory securityContextFactory,
-        KernelRouteTenantSelectionResolver routeTenantSelectionResolver,
-        KernelPrivilegedTenantAccessEvaluator privilegedTenantAccessEvaluator
+        KernelRouteTenantSelectionResolver routeTenantSelectionResolver
     ) {
         this.requestSecurityContext = requestSecurityContext;
         this.securityContextFactory = securityContextFactory;
         this.routeTenantSelectionResolver = routeTenantSelectionResolver;
-        this.privilegedTenantAccessEvaluator = privilegedTenantAccessEvaluator;
     }
 
     @Override
-    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         if (request.getAttribute(KernelRequestSecurityContext.KERNEL_CONTEXT_REQUEST_ATTRIBUTE)
             instanceof KernelSecurityTenantContext) {
             return true;
@@ -49,14 +46,11 @@ public class KernelRequestTenantContextInterceptor implements HandlerInterceptor
         }
 
         KernelRouteTenantSelection routeTenantSelection = routeTenantSelectionResolver.resolve(request, handler);
-        boolean privilegedCrossTenantAccess = privilegedTenantAccessEvaluator
-            .hasPrivilegedCrossTenantAccess(jwtAuthenticationToken);
         try {
             KernelSecurityTenantContext kernelContext = securityContextFactory.createKernelContext(
                 jwtAuthenticationToken,
                 routeTenantSelection.routeTenantId(),
-                routeTenantSelection.tenantProtectedOperation(),
-                privilegedCrossTenantAccess
+                routeTenantSelection.tenantProtectedOperation()
             );
             requestSecurityContext.storeCurrentKernelContext(kernelContext);
         } catch (KernelTenantResolutionException ex) {
@@ -67,6 +61,8 @@ public class KernelRequestTenantContextInterceptor implements HandlerInterceptor
                 jwtAuthenticationToken.getClass().getSimpleName(),
                 ex.getClass().getSimpleName()
             );
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+            return false;
         }
         return true;
     }

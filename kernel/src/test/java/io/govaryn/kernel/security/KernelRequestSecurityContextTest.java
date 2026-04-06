@@ -118,6 +118,7 @@ class KernelRequestSecurityContextTest {
             new KernelSecurityIdentityResolver(),
             new KernelTenantScopeExtractor(),
             new KernelActiveTenantResolver(new KernelTenantAccessValidator()),
+            new KernelPrivilegedTenantAccessEvaluator(properties),
             properties
         );
     }

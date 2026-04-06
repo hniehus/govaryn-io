@@ -10,6 +10,7 @@ This section captures runtime behavior of the modular kernel.
 4. Observability and operations flow
 5. HTTP authentication flow for public/protected endpoints
 6. Kernel authorization framework flow for protected backend paths
+7. Tenant context establishment and enforcement flow
 
 ## Module Startup Lifecycle
 
@@ -100,3 +101,43 @@ sequenceDiagram
 
 Startup guardrail:
 - `KernelProtectedAuthorizationIntegrationGuardrail` fails startup if required protected resource/action registrations are missing.
+
+## Tenant Context Establishment and Enforcement Flow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Security as Spring Security (JWT)
+    participant Interceptor as KernelRequestTenantContextInterceptor
+    participant Factory as KernelSecurityContextFactory
+    participant Scope as KernelTenantScopeExtractor
+    participant Resolver as KernelActiveTenantResolver
+    participant ReqCtx as KernelRequestSecurityContext
+    participant Handler as Controller/Service
+
+    Client->>Security: Authenticated request
+    alt Missing or invalid authentication
+        Security-->>Client: 401 Unauthorized
+    else Authenticated JWT
+        Security->>Interceptor: preHandle(...)
+        Interceptor->>Factory: createKernelContext(jwt, routeTenantId, tenantProtected)
+        Factory->>Scope: extract(authentication)
+        Factory->>Resolver: resolve(tenantScope + routeTenantId + tenantProtected + privilegedFlag)
+        alt Tenant resolution fails (missing/invalid/out-of-scope tenant context)
+            Interceptor-->>Client: 403 Forbidden
+        else Context resolved
+            Factory-->>ReqCtx: store KernelSecurityTenantContext once per request
+            Handler->>ReqCtx: currentKernelContext()/currentActiveTenant()
+            ReqCtx-->>Handler: principal + tenant scope + active tenant
+            Handler-->>Client: 2xx response
+        end
+    end
+```
+
+Implemented tenant rules in this flow:
+- Token is authoritative for tenant scope.
+- Route is the only explicit tenant selector in this story.
+- Single-tenant token with no explicit route tenant resolves that tenant as active.
+- Multi-tenant token on tenant-protected operation requires explicit route tenant.
+- Explicit route tenant must be inside granted scope unless explicit privileged cross-tenant authority is present.
+- Privileged cross-tenant access still requires explicit route tenant and fails closed when token scope is empty.

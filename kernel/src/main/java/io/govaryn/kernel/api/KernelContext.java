@@ -12,13 +12,14 @@ public record KernelContext(
     KernelEnvironment environment,
     String kernelVersion,
     ConfigurationManager configurationManager,
-    KernelAuthorizationService authorizationService
+    KernelAuthorizationService authorizationService,
+    KernelCurrentSecurityContext currentSecurityContext
 ) {
     /**
      * Legacy constructor for backward compatibility without configuration manager.
      */
     public KernelContext(String kernelId, KernelEnvironment environment, String kernelVersion) {
-        this(kernelId, environment, kernelVersion, null, null);
+        this(kernelId, environment, kernelVersion, null, null, null);
     }
 
     /**
@@ -30,6 +31,26 @@ public record KernelContext(
         String kernelVersion,
         ConfigurationManager configurationManager
     ) {
-        this(kernelId, environment, kernelVersion, configurationManager, null);
+        this(kernelId, environment, kernelVersion, configurationManager, null, null);
+    }
+
+    /**
+     * Backward-compatible constructor with configuration manager and authorization service.
+     */
+    public KernelContext(
+        String kernelId,
+        KernelEnvironment environment,
+        String kernelVersion,
+        ConfigurationManager configurationManager,
+        KernelAuthorizationService authorizationService
+    ) {
+        this(
+            kernelId,
+            environment,
+            kernelVersion,
+            configurationManager,
+            authorizationService,
+            null
+        );
     }
 }

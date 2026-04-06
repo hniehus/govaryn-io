@@ -1,5 +1,6 @@
 package io.govaryn.kernel.security;
 
+import io.govaryn.kernel.api.KernelCurrentSecurityContext;
 import io.govaryn.kernel.security.authorization.framework.model.SecurityContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,7 +17,7 @@ import java.util.Optional;
  * Request-scoped access to kernel-managed security contexts.
  */
 @Component
-public class KernelRequestSecurityContext {
+public class KernelRequestSecurityContext implements KernelCurrentSecurityContext {
 
     public static final String KERNEL_CONTEXT_REQUEST_ATTRIBUTE = KernelRequestSecurityContext.class.getName()
         + ".KERNEL_CONTEXT";
@@ -29,6 +30,7 @@ public class KernelRequestSecurityContext {
         this.securityContextFactory = securityContextFactory;
     }
 
+    @Override
     public Optional<KernelSecurityTenantContext> currentKernelContext() {
         Optional<KernelSecurityTenantContext> cached = resolveCachedKernelContext();
         if (cached.isPresent()) {

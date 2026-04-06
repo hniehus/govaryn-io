@@ -58,6 +58,13 @@ class KernelRequestSecurityContextTest {
         assertThat(current.get().userId()).isEqualTo("subject-1");
         assertThat(current.get().tenantScope().permittedTenantIds()).containsExactly("tenant-a");
         assertThat(current.get().activeTenantId()).isEqualTo("tenant-a");
+        assertThat(requestSecurityContext.currentPrincipal()).isPresent();
+        assertThat(requestSecurityContext.currentPrincipal().orElseThrow().subject()).isEqualTo("subject-1");
+        assertThat(requestSecurityContext.currentTenantScope()).isPresent();
+        assertThat(requestSecurityContext.currentTenantScope().orElseThrow().permittedTenantIds())
+            .containsExactly("tenant-a");
+        assertThat(requestSecurityContext.currentActiveTenant()).isPresent();
+        assertThat(requestSecurityContext.currentActiveTenant().orElseThrow().tenantId()).isEqualTo("tenant-a");
     }
 
     @Test

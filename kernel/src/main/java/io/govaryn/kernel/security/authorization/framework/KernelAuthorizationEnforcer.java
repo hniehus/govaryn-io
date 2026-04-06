@@ -1,6 +1,7 @@
 package io.govaryn.kernel.security.authorization.framework;
 
-import io.govaryn.kernel.security.KernelRequestSecurityContext;
+import io.govaryn.kernel.api.KernelCurrentSecurityContext;
+import io.govaryn.kernel.security.KernelSecurityTenantContext;
 import io.govaryn.kernel.security.authorization.framework.model.AuthorizationAction;
 import io.govaryn.kernel.security.authorization.framework.model.AuthorizationDecision;
 import io.govaryn.kernel.security.authorization.framework.model.AuthorizationRequest;
@@ -16,14 +17,14 @@ import java.util.Map;
 @Component
 public class KernelAuthorizationEnforcer {
 
-    private final KernelRequestSecurityContext requestSecurityContext;
+    private final KernelCurrentSecurityContext currentSecurityContext;
     private final AuthorizationService authorizationService;
 
     public KernelAuthorizationEnforcer(
-        KernelRequestSecurityContext requestSecurityContext,
+        KernelCurrentSecurityContext currentSecurityContext,
         AuthorizationService authorizationService
     ) {
-        this.requestSecurityContext = requestSecurityContext;
+        this.currentSecurityContext = currentSecurityContext;
         this.authorizationService = authorizationService;
     }
 
@@ -34,7 +35,8 @@ public class KernelAuthorizationEnforcer {
         String resourceId,
         Map<String, String> attributes
     ) {
-        SecurityContext securityContext = requestSecurityContext.current()
+        SecurityContext securityContext = currentSecurityContext.currentKernelContext()
+            .map(this::toAuthorizationSecurityContext)
             .orElseThrow(() -> new KernelAccessDeniedException(
                 DenyReason.SUBJECT_NOT_AUTHENTICATED,
                 moduleId,
@@ -74,5 +76,15 @@ public class KernelAuthorizationEnforcer {
                 resourceId
             );
         }
+    }
+
+    private SecurityContext toAuthorizationSecurityContext(KernelSecurityTenantContext kernelContext) {
+        return new SecurityContext(
+            kernelContext.userId(),
+            kernelContext.activeTenantId(),
+            kernelContext.authorities(),
+            kernelContext.claims(),
+            kernelContext.authenticationMetadata()
+        );
     }
 }

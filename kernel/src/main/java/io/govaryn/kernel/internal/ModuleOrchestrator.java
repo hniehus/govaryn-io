@@ -3,6 +3,7 @@ package io.govaryn.kernel.internal;
 import io.govaryn.kernel.api.KernelContext;
 import io.govaryn.kernel.api.KernelModule;
 import io.govaryn.kernel.api.KernelAuthorizationService;
+import io.govaryn.kernel.api.KernelCurrentSecurityContext;
 import io.govaryn.kernel.config.GovarynKernelProperties;
 import io.govaryn.kernel.config.ModuleFailurePolicyAction;
 import io.govaryn.kernel.module.ModuleFailureDetails;
@@ -54,6 +55,7 @@ public class ModuleOrchestrator implements ApplicationRunner {
     private final ModuleDependencyGraphValidator dependencyGraphValidator;
     private final ModuleInitializationExecutor initializationExecutor;
     private final KernelAuthorizationService kernelAuthorizationService;
+    private final KernelCurrentSecurityContext kernelCurrentSecurityContext;
 
     @Autowired
     public ModuleOrchestrator(ObjectProvider<KernelModule> modules,
@@ -65,6 +67,7 @@ public class ModuleOrchestrator implements ApplicationRunner {
                               ModuleDependencyGraphValidator dependencyGraphValidator,
                               ModuleInitializationExecutor initializationExecutor,
                               ObjectProvider<KernelAuthorizationService> kernelAuthorizationServiceProvider,
+                              ObjectProvider<KernelCurrentSecurityContext> currentSecurityContextProvider,
                               @Value("${spring.application.version:${project.version:unknown}}") String kernelVersion) {
         this.modules = modules.orderedStream().sorted(Comparator.comparingInt(KernelModule::order)).toList();
         this.properties = properties;
@@ -75,6 +78,7 @@ public class ModuleOrchestrator implements ApplicationRunner {
         this.dependencyGraphValidator = dependencyGraphValidator;
         this.initializationExecutor = initializationExecutor;
         this.kernelAuthorizationService = kernelAuthorizationServiceProvider.getIfAvailable();
+        this.kernelCurrentSecurityContext = currentSecurityContextProvider.getIfAvailable();
         this.kernelVersion = kernelVersion;
     }
 
@@ -97,6 +101,7 @@ public class ModuleOrchestrator implements ApplicationRunner {
             dependencyGraphValidator,
             initializationExecutor,
             nullObjectProvider(),
+            nullObjectProvider(),
             kernelVersion
         );
     }
@@ -108,7 +113,8 @@ public class ModuleOrchestrator implements ApplicationRunner {
             properties.getEnvironment(),
             kernelVersion,
             null,
-            kernelAuthorizationService
+            kernelAuthorizationService,
+            kernelCurrentSecurityContext
         );
         List<ModuleDiscoveryCandidate> candidates = discoveryService.discover();
         List<ModuleValidationReport> reports = candidates.isEmpty()

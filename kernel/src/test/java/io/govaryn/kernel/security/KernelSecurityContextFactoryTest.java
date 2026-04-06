@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class KernelSecurityContextFactoryTest {
 
@@ -96,11 +97,126 @@ class KernelSecurityContextFactoryTest {
             .containsEntry("roles", "admin support");
     }
 
+    @Test
+    void mapsTenantScopeAndLeavesActiveTenantUnsetWhenMultipleTenantsAreGranted() {
+        KernelSecurityContextFactory factory = newFactory("roles", "ROLE_");
+
+        JwtAuthenticationToken authentication = jwtAuthenticationToken(
+            Map.of(
+                "sub", "user-314",
+                "tenant_ids", List.of("tenant-b", "tenant-a", "tenant-b"),
+                "roles", List.of("support")
+            ),
+            List.of("ROLE_support"),
+            "mia"
+        );
+
+        KernelSecurityTenantContext kernelContext = factory.createKernelContext(authentication);
+
+        assertThat(kernelContext.tenantScope().permittedTenantIds()).containsExactly("tenant-a", "tenant-b");
+        assertThat(kernelContext.activeTenant()).isNull();
+        assertThat(kernelContext.principal().subject()).isEqualTo("user-314");
+        assertThat(kernelContext.principal().authorities()).containsExactly("ROLE_support");
+    }
+
+    @Test
+    void resolvesExplicitRouteTenantForTenantProtectedRequestWhenTenantIsInScope() {
+        KernelSecurityContextFactory factory = newFactory("roles", "ROLE_");
+
+        JwtAuthenticationToken authentication = jwtAuthenticationToken(
+            Map.of(
+                "sub", "user-500",
+                "tenant_ids", List.of("tenant-a", "tenant-b"),
+                "roles", List.of("support")
+            ),
+            List.of("ROLE_support"),
+            "ava"
+        );
+
+        KernelSecurityTenantContext kernelContext = factory.createKernelContext(
+            authentication,
+            "tenant-b",
+            true
+        );
+
+        assertThat(kernelContext.activeTenantId()).isEqualTo("tenant-b");
+    }
+
+    @Test
+    void deniesTenantProtectedRequestWithMultiTenantScopeWhenRouteTenantIsMissing() {
+        KernelSecurityContextFactory factory = newFactory("roles", "ROLE_");
+
+        JwtAuthenticationToken authentication = jwtAuthenticationToken(
+            Map.of(
+                "sub", "user-501",
+                "tenant_ids", List.of("tenant-a", "tenant-b"),
+                "roles", List.of("support")
+            ),
+            List.of("ROLE_support"),
+            "kai"
+        );
+
+        assertThatThrownBy(() -> factory.createKernelContext(authentication, null, true))
+            .isInstanceOf(KernelTenantResolutionException.class)
+            .extracting(exception -> ((KernelTenantResolutionException) exception).failure())
+            .isEqualTo(KernelTenantResolutionFailure.EXPLICIT_TENANT_SELECTION_REQUIRED);
+    }
+
+    @Test
+    void allowsPrivilegedExplicitCrossTenantRouteSelectionOutsideGrantedScope() {
+        KernelSecurityContextFactory factory = newFactory("roles", "ROLE_");
+
+        JwtAuthenticationToken authentication = jwtAuthenticationToken(
+            Map.of(
+                "sub", "user-777",
+                "tenant_id", "tenant-a",
+                "roles", List.of("admin", "tenant_cross_access")
+            ),
+            List.of("ROLE_admin", KernelPrivilegedTenantAccessEvaluator.CROSS_TENANT_AUTHORITY),
+            "privileged-user"
+        );
+
+        KernelSecurityTenantContext kernelContext = factory.createKernelContext(
+            authentication,
+            "tenant-z",
+            true
+        );
+
+        assertThat(kernelContext.activeTenantId()).isEqualTo("tenant-z");
+        assertThat(kernelContext.tenantScope().permittedTenantIds()).containsExactly("tenant-a");
+        assertThat(kernelContext.privilegedCrossTenantAccess()).isTrue();
+    }
+
+    @Test
+    void deniesPrivilegedExplicitCrossTenantSelectionWhenTokenScopeIsEmpty() {
+        KernelSecurityContextFactory factory = newFactory("roles", "ROLE_");
+
+        JwtAuthenticationToken authentication = jwtAuthenticationToken(
+            Map.of(
+                "sub", "user-888",
+                "roles", List.of("admin", "tenant_cross_access")
+            ),
+            List.of("ROLE_admin", KernelPrivilegedTenantAccessEvaluator.CROSS_TENANT_AUTHORITY),
+            "privileged-user"
+        );
+
+        assertThatThrownBy(() -> factory.createKernelContext(authentication, "tenant-z", true))
+            .isInstanceOf(KernelTenantResolutionException.class)
+            .extracting(exception -> ((KernelTenantResolutionException) exception).failure())
+            .isEqualTo(KernelTenantResolutionFailure.REQUESTED_TENANT_NOT_PERMITTED);
+    }
+
     private static KernelSecurityContextFactory newFactory(String authorityClaim, String authorityPrefix) {
         GovarynKernelSecurityProperties properties = new GovarynKernelSecurityProperties();
         properties.setAuthorityClaim(authorityClaim);
         properties.setAuthorityPrefix(authorityPrefix);
-        return new KernelSecurityContextFactory(new KernelSecurityIdentityResolver(), properties);
+        return new KernelSecurityContextFactory(
+            new KernelSecurityIdentityResolver(),
+            new KernelTenantScopeExtractor(),
+            new KernelActiveTenantResolver(new KernelTenantAccessValidator()),
+            new KernelPrivilegedTenantAccessEvaluator(properties),
+            properties
+        );
     }
 
     private static JwtAuthenticationToken jwtAuthenticationToken(

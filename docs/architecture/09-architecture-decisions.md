@@ -13,8 +13,8 @@ Capture significant architecture decisions and their rationale.
 - Current decision: [ADR-0004: Module Validation Rules and Error Model](../adr/0004-module-validation-rules-and-error-model.md)
 - Current decision: [ADR-0005: Module Failure Policy](../adr/0005-module-failure-policy.md)
 - Current decision: [ADR-0006: Kernel Authorization Framework and Kernel-Controlled Enforcement](../adr/0006-kernel-authorization-framework-and-enforcement.md)
+- Current decision: [ADR-0007: Consistent Security and Tenant Context Establishment and Enforcement](../adr/0007-kernel-security-and-tenant-context-establishment.md)
 
 ## Current Gaps
 
-- The JWT/OIDC security foundation is implemented in `kernel/src/main/java/io/govaryn/kernel/security`, but no dedicated ADR exists yet in `docs/adr`.
 - The legacy kernel policy authorization implementation is active in `kernel/src/main/java/io/govaryn/kernel/security/authorization`, but no dedicated ADR exists yet in `docs/adr`.

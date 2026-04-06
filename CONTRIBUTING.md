@@ -53,14 +53,14 @@ If it’s not pure documentation: tests belong with it. Period.
 - **Latest Java LTS** + **latest Spring / Spring Boot**
 - **Classic 3-layer architecture** (UI / Application / Domain / Persistence — depending on module)
 - **Modular**: clear modules, clear contracts
-- **Rust compute services**: for heavy, deterministic computation — but **not** authoritative business state (see below)
+- **External compute services** (when used): for heavy deterministic computation, not authoritative business state
 
 ---
 
 ## Workflow (fast, traceable, review-friendly)
 
 ### Branch names
-- `feat/<short-description>`
+- `feature/<short-description>`
 - `fix/<short-description>`
 - `chore/<short-description>`
 
@@ -83,9 +83,9 @@ A PR is not just “code”. It’s a **small package of responsibility**:
 
 ---
 
-## Rust compute services — rules that keep it scalable
+## External compute services — rules that keep it scalable
 
-Rust services are for compute here, not a second domain.
+Compute services are for deterministic compute here, not a second domain model.
 
 - **Compute-only**: no authoritative business state
 - **Deterministic**, where possible (seed/parameters explicit)

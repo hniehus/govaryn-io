@@ -23,6 +23,25 @@ Document concepts relevant across multiple parts of the system.
 - JWT identity mapping is standardized by the kernel: subject, issuer, username fallback (`preferred_username` -> `username` -> `sub`), and authorities from configured claim/prefix.
 - Module code is expected to consume kernel-provided authentication context rather than validating tokens independently.
 
+## Security and Tenant Context (Implemented Behavior)
+
+- The kernel establishes one `KernelSecurityTenantContext` per authenticated request and stores it for request-scoped reuse.
+- Token claims are authoritative for tenant scope (`tenant_scope`, `tenantScope`, `tenant_ids`, `tenantIds`, `tenants`, or single-tenant fallbacks `tenant_id`, `tenantId`, `tid`).
+- Route data is the only explicit tenant selector in this story (`tenantId`, `tenant_id`, `tid` URI template variables).
+- Active tenant resolution rules:
+  - explicit route tenant -> validate against token scope before activation
+  - no explicit route tenant + exactly one permitted tenant -> that tenant becomes active
+  - tenant-protected operation + multi-tenant scope + no explicit route tenant -> deny (`403`)
+  - tenant-protected operation + empty scope + no explicit route tenant -> deny (`403`)
+- Privileged cross-tenant access is explicit and minimal:
+  - requires explicit route tenant
+  - requires explicit privileged authority (`tenant_cross_access` suffix, for example `ROLE_tenant_cross_access`)
+  - still fails closed when token tenant scope is empty
+- Failure semantics:
+  - missing/invalid authentication -> `401 Unauthorized`
+  - authenticated request with missing/invalid/unauthorized tenant context -> `403 Forbidden`
+- Modules/services must read tenant-aware request context from `KernelCurrentSecurityContext` and must not reconstruct tenant selection from raw token claims, headers, or routes.
+
 ## Authorization (Kernel Framework + Module Rules)
 
 - Authorization for protected backend paths is split into:
@@ -52,7 +71,7 @@ Document concepts relevant across multiple parts of the system.
 
 - Denied authorization attempts are logged as structured events (`event=authorization_deny_audit`).
 - Deny audit fields include at least: `timestamp`, `userId`, `tenantId`, `module`, `resourceType`, `action`, `resourceId`, `decision`, `denyReason`, `requestRef`, `errorType`.
-- Security-context mapping failures are logged as structured warnings (`event=security_context_mapping_failed`).
+- Security-context mapping/preload failures are logged as structured warnings (`event=security_context_mapping_failed`, `event=security_context_preload_failed`).
 - Raw tokens, credentials, and sensitive payload data must not be logged.
 - Legacy policy-decision logging (`event=authorization_decision`) remains for operation-level policy flows.
 

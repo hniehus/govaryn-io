@@ -1,30 +1,35 @@
-# Govaryn Kernel Skeleton
+# Govaryn Kernel
 
-Initial runnable project skeleton for the Govaryn Kernel runtime.
+Runnable kernel runtime for Govaryn IO.
 
 ## Stack
-- Kotlin
+- Java 21
 - Spring Boot 4.0.3
 - Maven
-- Java 25
 
 ## Project layout
 - `pom.xml` — parent multi-module build
 - `kernel/` — runnable kernel process
-- `config/application.properties.example` — minimal external config template
+- `modules/` — shared example module sources used by kernel scenarios
+- `config/application.properties.example` — minimal external configuration template
 
 ## Minimal local run
-1. Copy the template:
+1. Copy the template (first run only):
    ```bash
    cp config/application.properties.example config/application.properties
    ```
 2. Start the kernel:
    ```bash
-   mvn -pl kernel spring-boot:run -Dspring-boot.run.arguments="--spring.config.additional-location=optional:file:./config/"
+   ./run.sh
    ```
-3. Check health:
+   Alternative:
+   ```bash
+   mvn -pl kernel spring-boot:run -Dspring-boot.run.arguments="--spring.config.additional-location=optional:file:$(pwd)/config/"
+   ```
+3. Check endpoints:
    ```bash
    curl http://localhost:8080/health
+   curl http://localhost:8080/actuator/health
    ```
 
 ## Build
@@ -32,7 +37,8 @@ Initial runnable project skeleton for the Govaryn Kernel runtime.
 mvn clean install
 ```
 
-That installs the versioned `govaryn-kernel` artifact into your local Maven repository.
+This installs the versioned `govaryn-kernel` artifact into your local Maven repository.
 
-## Reference Modules
-- See [reference module scenarios](../docs/modules/REFERENCE_MODULES.md) for opt-in positive and negative module examples.
+## Reference docs
+- [Reference modules and negative examples](../docs/modules/REFERENCE_MODULES.md)
+- [Module startup and registration runbook](../docs/operations/MODULE_STARTUP_AND_REGISTRATION.md)

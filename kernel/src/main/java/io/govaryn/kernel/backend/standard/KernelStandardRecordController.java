@@ -1,5 +1,6 @@
 package io.govaryn.kernel.backend.standard;
 
+import io.govaryn.kernel.security.KernelTenantProtectedOperation;
 import io.govaryn.kernel.security.authorization.framework.KernelAuthorizationEnforcer;
 import io.govaryn.kernel.security.authorization.framework.model.AuthorizationAction;
 import jakarta.validation.Valid;
@@ -22,6 +23,7 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @RestController
 @RequestMapping("/api/kernel/records")
+@KernelTenantProtectedOperation
 public class KernelStandardRecordController {
 
     private final KernelStandardRecordService recordService;

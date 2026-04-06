@@ -13,6 +13,8 @@ Summarize the fundamental strategic decisions and architecture approaches.
 ## Current Strategy Notes
 
 - Authentication is kernel-owned and implemented as a JWT resource-server foundation (single configured OIDC-compatible issuer).
+- Security/tenant context is kernel-managed per authenticated request (`KernelSecurityTenantContext`) and exposed through `KernelCurrentSecurityContext`.
+- Tenant scope is token-authoritative; route variables are the only explicit tenant selector in this story.
 - Authorization for protected backend paths is split:
   - kernel owns the authorization framework (`SecurityContext`, request/decision model, registry, orchestration, deny handling, audit logging, guardrails)
   - modules own resource/action/evaluator rules through `ModuleSecurityContributor`

@@ -60,17 +60,20 @@ For module endpoint implementations, use this pattern:
 
 ```java
 @GetMapping("/api/modules/example/whoami")
-Map<String, Object> whoAmI(Authentication authentication) {
+Map<String, Object> whoAmI(KernelCurrentSecurityContext currentSecurityContext) {
+    KernelSecurityTenantContext context = currentSecurityContext.currentKernelContext()
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized"));
     return Map.of(
-        "subject", authentication.getName(),
-        "authorities", authentication.getAuthorities().stream()
-            .map(GrantedAuthority::getAuthority)
-            .toList()
+        "subject", context.principal().subject(),
+        "activeTenantId", currentSecurityContext.currentActiveTenant()
+            .map(KernelActiveTenantContext::tenantId)
+            .orElse(null),
+        "authorities", context.principal().authorities()
     );
 }
 ```
 
-This pattern consumes kernel-provided authentication context and avoids independent module token validation.
+This pattern consumes kernel-provided security/tenant context and avoids independent module token or tenant parsing.
 
 ## Automated References
 

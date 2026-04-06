@@ -18,10 +18,25 @@ public class KernelAccessDeniedExceptionHandler {
         KernelAccessDeniedException exception,
         HttpServletRequest request
     ) {
+        return forbiddenResponse("ACCESS_DENIED", request);
+    }
+
+    @ExceptionHandler(KernelTenantResolutionException.class)
+    public ResponseEntity<KernelAccessDeniedResponse> handleKernelTenantResolutionDenied(
+        KernelTenantResolutionException exception,
+        HttpServletRequest request
+    ) {
+        return forbiddenResponse("ACCESS_DENIED", request);
+    }
+
+    private ResponseEntity<KernelAccessDeniedResponse> forbiddenResponse(
+        String reason,
+        HttpServletRequest request
+    ) {
         KernelAccessDeniedResponse response = new KernelAccessDeniedResponse(
             "ACCESS_DENIED",
             "Forbidden",
-            "ACCESS_DENIED",
+            reason,
             request.getRequestURI(),
             Instant.now().toString()
         );

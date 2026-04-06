@@ -66,33 +66,44 @@ Check startup logs for:
 
 This is the minimum operability baseline for support and platform teams.
 
-## 7. Consume Kernel Authentication (Do Not Re-Validate Tokens)
+## 7. Consume Kernel Security/Tenant Context (Do Not Re-Validate Tokens)
 
 If your module exposes HTTP endpoints:
 
-- rely on kernel authentication and the Spring `Authentication` already established by the kernel
-- use authorities from the authenticated context for module logic
+- read request context through `KernelCurrentSecurityContext`
+- use kernel-provided principal, tenant scope, and active tenant for module logic
 - do not parse/validate bearer tokens inside module code
+- do not reconstruct tenant selection from route data or headers in module logic
 
 Example usage pattern:
 
 ```java
 @RestController
-class ModuleStatusController {
+class ExampleController {
 
-    @GetMapping("/api/modules/example/status")
-    Map<String, Object> status(Authentication authentication) {
+    private final KernelCurrentSecurityContext currentSecurityContext;
+
+    ExampleController(KernelCurrentSecurityContext currentSecurityContext) {
+        this.currentSecurityContext = currentSecurityContext;
+    }
+
+    @GetMapping("/api/modules/example/tenant-aware-status")
+    Map<String, Object> status() {
+        KernelSecurityTenantContext context = currentSecurityContext.currentKernelContext()
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthorized"));
+        String activeTenantId = currentSecurityContext.currentActiveTenant()
+            .map(KernelActiveTenantContext::tenantId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Tenant context required"));
         return Map.of(
-            "subject", authentication.getName(),
-            "authorities", authentication.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .toList()
+            "subject", context.principal().subject(),
+            "activeTenantId", activeTenantId,
+            "authorities", context.principal().authorities()
         );
     }
 }
 ```
 
-The module consumes authenticated context only; token validation remains kernel-owned.
+The module consumes kernel-managed context only; token validation and tenant resolution remain kernel-owned.
 
 ## 8. Register Protected Resource Rules Through Kernel SPI
 

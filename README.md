@@ -10,12 +10,12 @@ If you like building systems where correctness, boundaries, and evidence matter 
 
 This repository contains:
 
-- a **modular Spring Boot** application (classic 3-layer, organized as a modular monolith)
-- **Rust compute services** for heavy optimization/simulation workloads
-- a **Helm chart** for self-hosting
-- **Ansible** for SaaS provisioning/configuration
+- the **Govaryn Kernel** runtime (`kernel/`) built with Spring Boot
+- shared **module example sources** (`modules/`) used by kernel reference scenarios
+- architecture, ADR, operations, and security documentation (`docs/`)
+- local configuration templates (`config/`) and build/run helper scripts (`scripts/`, `run.sh`)
 
-The guiding idea: **keep business truth in one place**, keep compute fast and replaceable, and make decisions explainable months later.
+The guiding idea: **keep business truth in one place**, enforce boundaries centrally, and make decisions explainable months later.
 
 ---
 
@@ -31,15 +31,14 @@ Decision-grade objects have a history that can’t be hand-waved away. You can t
 Whenever possible, the system should reflect delivery reality through integrations and facts — not manual traffic lights.
 
 ### Compute services are not the source of truth
-Rust services do compute. The authoritative business state stays in the core system.
+External compute services can do heavy processing, but authoritative business state stays in the core system.
 
 ---
 
 ## Architecture at a glance
 
-- **Java (latest LTS)** + **Spring Boot (latest)**, pinned centrally via a parent POM
+- **Java 21** + **Spring Boot 4.0.3**, pinned in the parent POM
 - **Maven multi-module**
-- **Rust workspace** for compute-only services
 - “Modular monolith” approach: module boundaries and contracts matter; deployment stays simple
 
 ---
@@ -47,13 +46,12 @@ Rust services do compute. The authoritative business state stays in the core sys
 ## Repository layout
 
 ```text
-apps/api                      Spring Boot API
-platform/*                    cross-cutting modules (identity, tenancy, audit, i18n, ...)
-domains/*                     business modules (strategy, funding, capacity, dependencies, ...)
-rust-services/*               compute-only services
-infra/helm/govaryn            self-hosting Helm chart
-infra/ansible                 SaaS provisioning/config (Ansible)
-docs                          ADRs, security, compliance
+kernel/                       Spring Boot kernel runtime
+modules/                      shared example module sources
+docs/                         architecture, ADRs, operations, security, compliance
+config/                       local application.properties templates
+scripts/                      Maven wrapper bootstrap helpers
+run.sh                        local kernel startup wrapper
 ```
 
 ---
@@ -82,7 +80,8 @@ mvn -B -ntp clean test
 ```
 
 **Kernel endpoints:**
-- Health: http://localhost:8080/actuator/health
+- Health (public): http://localhost:8080/health
+- Actuator health: http://localhost:8080/actuator/health
 - Metrics: http://localhost:8080/actuator/metrics
 - Info: http://localhost:8080/actuator/info
 - Who am I (protected): http://localhost:8080/api/kernel/whoami
@@ -112,25 +111,13 @@ The kernel implements policy-based authorization with a kernel-owned PDP.
 
 - Policy source: external YAML (`govaryn.kernel.authorization.policy-path`)
 - Decision model: deny overrides permit, default deny when no rule matches, fail closed on evaluation errors
-- Module contract: modules delegate authorization decisions to `KernelAuthorizationService`
+- Module contract: modules integrate protected resources through `ModuleSecurityContributor`; kernel enforces decisions
 - Reload hook: `POST /api/kernel/internal/authorization/policy/reload` (protected endpoint)
 
 Reference docs:
 - `docs/security/AUTHORIZATION_POLICY_FORMAT.md`
 - `docs/security/MODULE_AUTHORIZATION_CONTRACT.md`
 - `docs/security/KERNEL_POLICY_AUTHZ_INTEGRATION_NOTE.md`
-
----
-
-## Self-hosting (Helm)
-
-The Helm chart lives at `infra/helm/govaryn`.
-
-```bash
-helm upgrade --install govaryn infra/helm/govaryn -n govaryn --create-namespace
-```
-
-**Important:** the included Postgres manifest is a placeholder. For a real install, use a proper Postgres chart/StatefulSet with PVCs, backups, and secrets management.
 
 ---
 

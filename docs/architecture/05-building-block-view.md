@@ -34,6 +34,7 @@ Responsibilities:
 - `KernelJwtAuthenticationConverter` + `KernelJwtAuthoritiesConverter`: standardized principal/authority mapping from JWT claims.
 - `KernelAuthenticationFailureEntryPoint`: sanitized authentication failure categorization and 401 responses.
 - `KernelSecurityIdentityResolver` + `KernelSecurityContextFactory` + `KernelRequestSecurityContext`: canonical authenticated identity/context normalization for authorization.
+- `KernelRequestTenantContextInterceptor` + `KernelRouteTenantSelectionResolver` + `KernelTenantScopeExtractor` + `KernelActiveTenantResolver` + `KernelTenantAccessValidator`: token-authoritative tenant scope extraction, route-based tenant selection, active tenant resolution, and fail-closed tenant access validation.
 - `ModuleSecurityContributor` + `ModuleSecurityContributionRegistrar`: module SPI and registration pipeline for protected resources/actions/evaluators.
 - `ResourcePolicyRegistry` (`InMemoryResourcePolicyRegistry`): kernel registry of module policy registrations.
 - `KernelAuthorizationService` + `KernelAuthorizationEnforcer`: central authorization orchestration and explicit kernel-managed enforcement hook.

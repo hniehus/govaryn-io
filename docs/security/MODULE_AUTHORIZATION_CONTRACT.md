@@ -59,10 +59,26 @@ final class ExampleSecurityContributor implements ModuleSecurityContributor {
 
 Evaluator input comes through `AuthorizationRequest` and includes:
 - `securityContext.userId`
-- `securityContext.tenantId` (if available)
+- `securityContext.tenantId` (set for tenant-protected operations with a valid active tenant)
 - `securityContext.globalRoles`
 - `securityContext.claims` (for example `scope`/`scp`)
 - `action`, `moduleId`, `resourceType`, optional `resourceId`, optional `attributes`
+
+## Tenant context rules (implemented)
+
+- Token is authoritative for tenant scope.
+- Route is the only explicit tenant selector in this story (`tenantId`, `tenant_id`, `tid`).
+- If token scope contains exactly one tenant and no explicit route tenant is provided, that tenant becomes active.
+- If token scope contains multiple tenants and the operation is tenant-protected, explicit route tenant selection is required.
+- Explicit route tenant must be inside token-granted scope, otherwise access is denied.
+- Minimal privileged cross-tenant override exists:
+  - requires explicit privileged authority (`tenant_cross_access` suffix, for example `ROLE_tenant_cross_access`)
+  - requires explicit target tenant in the route
+  - does not allow bypass when token tenant scope is empty
+- Failure semantics:
+  - missing/invalid authentication -> `401`
+  - authenticated request with invalid/missing/unauthorized tenant context -> `403`
+- Default behavior is deny-by-default for tenant-protected operations.
 
 ## Kernel enforcement behavior on standard paths
 

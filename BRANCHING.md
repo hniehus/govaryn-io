@@ -117,7 +117,7 @@ Merge the release into `master`:
 
 ```bash
 git checkout master
-git pull --rebase origin develop
+git pull --rebase origin master
 
 git merge --no-ff release/0.3.0
 git push
@@ -148,7 +148,7 @@ If something is broken in production and cannot wait for the next release, branc
 
 ```bash
 git checkout master
-git pull --rebase origin develop
+git pull --rebase origin master
 
 git checkout -b fix/hotfix-tenant-leak
 # work...

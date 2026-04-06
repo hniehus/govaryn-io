@@ -135,10 +135,10 @@ class ReferenceModuleAuthorizationEnforcementIntegrationTest {
     }
 
     @Test
-    @DisplayName("Update outside effective scope is denied and logged as structured audit")
-    void updateOutsideEffectiveScopeIsDeniedAndLoggedAsStructuredAudit(CapturedOutput output) throws Exception {
+    @DisplayName("Update without write scope is denied and logged as structured audit")
+    void updateWithoutWriteScopeIsDeniedAndLoggedAsStructuredAudit(CapturedOutput output) throws Exception {
         mockMvc.perform(put(readPath("tenant-2", "doc-2"))
-                .header("Authorization", "Bearer tenant1-write-token")
+                .header("Authorization", "Bearer tenant2-read-token")
                 .contentType(APPLICATION_JSON)
                 .content("{\"value\":\"blocked\"}"))
             .andExpect(status().isForbidden())
@@ -152,8 +152,8 @@ class ReferenceModuleAuthorizationEnforcementIntegrationTest {
         String logs = output.getOut() + output.getErr();
         assertThat(logs)
             .contains("event=authorization_deny_audit")
-            .contains("userId=subject-tenant1-write")
-            .contains("tenantId=tenant-1")
+            .contains("userId=subject-tenant2-read")
+            .contains("tenantId=tenant-2")
             .contains("module=" + ReferenceAuthorizationContract.MODULE_ID)
             .contains("resourceType=" + ReferenceAuthorizationContract.RESOURCE_TYPE)
             .contains("action=UPDATE")

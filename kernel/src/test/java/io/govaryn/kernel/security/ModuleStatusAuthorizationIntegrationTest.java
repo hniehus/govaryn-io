@@ -73,23 +73,19 @@ class ModuleStatusAuthorizationIntegrationTest {
     }
 
     @Test
-    void missingSubjectFailsSafelyWithForbidden() throws Exception {
+    void missingSubjectFailsSafelyWithUnauthorized() throws Exception {
         securityIdentityResolver.setMode(TestKernelSecurityIdentityResolver.Mode.THROW);
 
         mockMvc.perform(get("/modules/status").header("Authorization", "Bearer read-token"))
-            .andExpect(status().isForbidden())
-            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
-            .andExpect(jsonPath("$.reason").value("ACCESS_DENIED"));
+            .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void invalidSubjectInputFailsSafelyWithForbidden() throws Exception {
+    void invalidSubjectInputFailsSafelyWithUnauthorized() throws Exception {
         securityIdentityResolver.setMode(TestKernelSecurityIdentityResolver.Mode.BLANK_SUBJECT);
 
         mockMvc.perform(get("/modules/status").header("Authorization", "Bearer read-token"))
-            .andExpect(status().isForbidden())
-            .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
-            .andExpect(jsonPath("$.reason").value("ACCESS_DENIED"));
+            .andExpect(status().isUnauthorized());
     }
 
     @TestConfiguration

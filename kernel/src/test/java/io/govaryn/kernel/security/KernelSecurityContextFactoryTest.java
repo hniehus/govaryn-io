@@ -163,6 +163,32 @@ class KernelSecurityContextFactoryTest {
             .isEqualTo(KernelTenantResolutionFailure.EXPLICIT_TENANT_SELECTION_REQUIRED);
     }
 
+    @Test
+    void allowsPrivilegedExplicitCrossTenantRouteSelectionOutsideGrantedScope() {
+        KernelSecurityContextFactory factory = newFactory("roles", "ROLE_");
+
+        JwtAuthenticationToken authentication = jwtAuthenticationToken(
+            Map.of(
+                "sub", "user-777",
+                "tenant_id", "tenant-a",
+                "roles", List.of("admin", "tenant_cross_access")
+            ),
+            List.of("ROLE_admin", KernelPrivilegedTenantAccessEvaluator.CROSS_TENANT_AUTHORITY),
+            "privileged-user"
+        );
+
+        KernelSecurityTenantContext kernelContext = factory.createKernelContext(
+            authentication,
+            "tenant-z",
+            true,
+            true
+        );
+
+        assertThat(kernelContext.activeTenantId()).isEqualTo("tenant-z");
+        assertThat(kernelContext.tenantScope().permittedTenantIds()).containsExactly("tenant-a");
+        assertThat(kernelContext.privilegedCrossTenantAccess()).isTrue();
+    }
+
     private static KernelSecurityContextFactory newFactory(String authorityClaim, String authorityPrefix) {
         GovarynKernelSecurityProperties properties = new GovarynKernelSecurityProperties();
         properties.setAuthorityClaim(authorityClaim);

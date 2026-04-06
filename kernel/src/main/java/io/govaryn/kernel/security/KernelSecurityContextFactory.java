@@ -63,12 +63,17 @@ public class KernelSecurityContextFactory {
             tenantScopeExtraction.sourceClaimKey(),
             activeTenant
         );
-        Map<String, String> authenticationMetadata = resolveAuthenticationMetadata(identity, authentication);
+        Map<String, String> authenticationMetadata = resolveAuthenticationMetadata(
+            identity,
+            authentication,
+            privilegedCrossTenantAccess
+        );
 
         return new KernelSecurityTenantContext(
             identity,
             tenantScopeExtraction.tenantScope(),
             activeTenant,
+            privilegedCrossTenantAccess,
             claims,
             authenticationMetadata
         );
@@ -109,10 +114,12 @@ public class KernelSecurityContextFactory {
 
     private Map<String, String> resolveAuthenticationMetadata(
         KernelSecurityIdentity identity,
-        Authentication authentication
+        Authentication authentication,
+        boolean privilegedCrossTenantAccess
     ) {
         Map<String, String> metadata = new LinkedHashMap<>();
         metadata.put("authenticationType", authentication.getClass().getSimpleName());
+        metadata.put("privilegedCrossTenantAccess", String.valueOf(privilegedCrossTenantAccess));
         if (hasText(identity.username())) {
             metadata.put("username", identity.username().trim());
         }

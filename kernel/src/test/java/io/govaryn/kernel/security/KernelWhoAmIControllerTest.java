@@ -41,6 +41,7 @@ class KernelWhoAmIControllerTest {
                 ),
                 new KernelTenantScope(java.util.List.of("tenant-a")),
                 new KernelActiveTenantContext("tenant-a"),
+                false,
                 java.util.Map.of("scope", "module.status:read"),
                 java.util.Map.of("authenticationType", "JwtAuthenticationToken")
             )

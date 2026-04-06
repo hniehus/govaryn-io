@@ -11,6 +11,7 @@ public record KernelSecurityTenantContext(
     KernelSecurityIdentity principal,
     KernelTenantScope tenantScope,
     KernelActiveTenantContext activeTenant,
+    boolean privilegedCrossTenantAccess,
     Map<String, String> claims,
     Map<String, String> authenticationMetadata
 ) {
@@ -20,7 +21,9 @@ public record KernelSecurityTenantContext(
         claims = sanitizeStringMap(claims);
         authenticationMetadata = sanitizeStringMap(authenticationMetadata);
 
-        if (activeTenant != null && !tenantScope.permits(activeTenant.tenantId())) {
+        if (activeTenant != null
+            && !tenantScope.permits(activeTenant.tenantId())
+            && !privilegedCrossTenantAccess) {
             throw new IllegalArgumentException("activeTenant must be inside tenantScope");
         }
     }

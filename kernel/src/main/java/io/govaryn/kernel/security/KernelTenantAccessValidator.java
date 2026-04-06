@@ -1,5 +1,7 @@
 package io.govaryn.kernel.security;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -7,6 +9,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class KernelTenantAccessValidator {
+
+    private static final Logger log = LoggerFactory.getLogger(KernelTenantAccessValidator.class);
 
     public void validateExplicitTenantAccess(
         KernelTenantScope tenantScope,
@@ -27,8 +31,19 @@ public class KernelTenantAccessValidator {
         }
 
         if (privilegedCrossTenantAccess) {
+            log.info(
+                "event=tenant_access_scope_bypass_allowed routeTenantId={} permittedTenantCount={} reason=privileged_cross_tenant_authority",
+                normalizedRouteTenantId,
+                tenantScope.permittedTenantIds().size()
+            );
             return;
         }
+
+        log.warn(
+            "event=tenant_access_scope_bypass_denied routeTenantId={} permittedTenantCount={} reason=requested_tenant_not_permitted",
+            normalizedRouteTenantId,
+            tenantScope.permittedTenantIds().size()
+        );
 
         throw new KernelTenantResolutionException(
             KernelTenantResolutionFailure.REQUESTED_TENANT_NOT_PERMITTED,

@@ -89,6 +89,19 @@ class KernelTenantContextRequestFlowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Privileged authority allows explicit cross-tenant route selection")
+    void privilegedAuthorityAllowsExplicitCrossTenantRouteSelection() throws Exception {
+        mockMvc.perform(get("/api/kernel/test/tenant-context/tenants/tenant-2/protected")
+                .header("Authorization", "Bearer privileged-cross-tenant-token"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.userId").value("subject-privileged"))
+            .andExpect(jsonPath("$.activeTenantId").value("tenant-2"))
+            .andExpect(jsonPath("$.authorizationTenantId").value("tenant-2"))
+            .andExpect(jsonPath("$.tenantScope[0]").value("tenant-1"))
+            .andExpect(jsonPath("$.sameContextInstance").value(true));
+    }
+
+    @Test
     @DisplayName("Tenant-protected endpoint without route tenant denies multi-tenant tokens with 403")
     void tenantProtectedEndpointWithoutRouteTenantDeniesMultiTenantTokens() throws Exception {
         mockMvc.perform(get("/api/kernel/test/tenant-context/protected-no-route")
@@ -186,6 +199,13 @@ class KernelTenantContextRequestFlowIntegrationTest {
                     "multi-user",
                     List.of("viewer"),
                     List.of("tenant-1", "tenant-2")
+                );
+                case "privileged-cross-tenant-token" -> jwt(
+                    token,
+                    "subject-privileged",
+                    "privileged-user",
+                    List.of("viewer", "tenant_cross_access"),
+                    "tenant-1"
                 );
                 default -> throw new JwtException("invalid token");
             };

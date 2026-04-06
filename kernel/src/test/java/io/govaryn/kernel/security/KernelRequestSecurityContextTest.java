@@ -84,6 +84,7 @@ class KernelRequestSecurityContextTest {
             new KernelSecurityIdentity("subject-10", "https://issuer.example.com", "alex", List.of("ROLE_support")),
             new KernelTenantScope(List.of("tenant-a", "tenant-b")),
             new KernelActiveTenantContext("tenant-b"),
+            false,
             Map.of("scope", "records:read"),
             Map.of("authenticationType", "JwtAuthenticationToken")
         );

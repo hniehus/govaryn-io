@@ -1,0 +1,273 @@
+---
+- name: Provision minimal Kubernetes, Istio, and PostgreSQL
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    kubernetes_apt_channel: v1.30
+    kubectl_package_name: kubectl
+
+    k3s_config_path: /etc/rancher/k3s/config.yaml
+    kubeconfig_path: /etc/rancher/k3s/k3s.yaml
+    k3s_disable_components:
+      - traefik
+
+    istio_version: 1.29.1
+    istio_profile: ambient
+    istio_download_url: https://istio.io/downloadIstio
+    istio_download_dir: /tmp
+    gateway_api_crds_version: v1.3.0
+    gateway_api_crds_manifest_url: >-
+      https://github.com/kubernetes-sigs/gateway-api/releases/download/{{ gateway_api_crds_version }}/standard-install.yaml
+    gateway_api_crds_manifest_path: /opt/k8s-manifests/gateway-api-crds.yaml
+
+    postgres_namespace: postgres
+    postgres_manifest_dir: /opt/k8s-manifests
+    postgres_manifest_path: "{{ postgres_manifest_dir }}/postgres.yaml"
+    postgres_host_data_dir: /var/lib/postgres-k8s
+    postgres_storage_size: 1Gi
+    postgres_pv_name: postgres-host-pv
+    postgres_pvc_name: postgres-data
+    postgres_image: postgres:16
+    postgres_db_name: app
+    postgres_db_user: app
+    postgres_db_password: change-me
+    postgres_node_port: 30432
+
+  pre_tasks:
+    - name: Ensure target host uses Debian package management
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "Debian"
+        fail_msg: This playbook currently supports Debian/Ubuntu hosts only.
+
+    - name: Validate PostgreSQL NodePort range
+      ansible.builtin.assert:
+        that:
+          - postgres_node_port | int >= 30000
+          - postgres_node_port | int <= 32767
+        fail_msg: postgres_node_port must be within 30000-32767.
+
+  tasks:
+    - name: Install base packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+          - tar
+        state: present
+        update_cache: true
+
+    - name: Ensure apt keyring directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Download Kubernetes apt repository key
+      ansible.builtin.get_url:
+        url: "https://pkgs.k8s.io/core:/stable:/{{ kubernetes_apt_channel }}/deb/Release.key"
+        dest: /etc/apt/keyrings/kubernetes-apt-keyring.asc
+        mode: "0644"
+        force: true
+
+    - name: Add Kubernetes apt repository
+      ansible.builtin.apt_repository:
+        repo: >-
+          deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc]
+          https://pkgs.k8s.io/core:/stable:/{{ kubernetes_apt_channel }}/deb/ /
+        filename: kubernetes
+        state: present
+        update_cache: true
+
+    - name: Install kubectl
+      ansible.builtin.apt:
+        name: "{{ kubectl_package_name }}"
+        state: present
+
+    - name: Ensure k3s config directory exists
+      ansible.builtin.file:
+        path: "{{ k3s_config_path | dirname }}"
+        state: directory
+        mode: "0755"
+
+    - name: Render k3s configuration
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/k3s-config.yaml.j2"
+        dest: "{{ k3s_config_path }}"
+        mode: "0644"
+      notify: Restart k3s
+
+    - name: Download k3s installer script
+      ansible.builtin.get_url:
+        url: https://get.k3s.io
+        dest: /tmp/install-k3s.sh
+        mode: "0755"
+
+    - name: Install k3s server
+      ansible.builtin.command:
+        cmd: /tmp/install-k3s.sh
+      args:
+        creates: /usr/local/bin/k3s
+      environment:
+        INSTALL_K3S_CONFIG_FILE: "{{ k3s_config_path }}"
+
+    - name: Ensure k3s service is enabled and started
+      ansible.builtin.service:
+        name: k3s
+        state: started
+        enabled: true
+
+    - name: Flush handlers
+      ansible.builtin.meta: flush_handlers
+
+    - name: Wait for kubeconfig to exist
+      ansible.builtin.wait_for:
+        path: "{{ kubeconfig_path }}"
+        state: present
+        timeout: 120
+
+    - name: Wait for Kubernetes API readiness
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ kubeconfig_path }}"
+          - get
+          - nodes
+          - -o
+          - name
+      register: kubectl_nodes
+      changed_when: false
+      retries: 20
+      delay: 6
+      until: kubectl_nodes.rc == 0
+
+    - name: Ensure Kubernetes manifest directory exists
+      ansible.builtin.file:
+        path: "{{ postgres_manifest_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Download Kubernetes Gateway API CRDs manifest
+      ansible.builtin.get_url:
+        url: "{{ gateway_api_crds_manifest_url }}"
+        dest: "{{ gateway_api_crds_manifest_path }}"
+        mode: "0644"
+        force: true
+
+    - name: Install or reconcile Kubernetes Gateway API CRDs
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ kubeconfig_path }}"
+          - apply
+          - -f
+          - "{{ gateway_api_crds_manifest_path }}"
+      register: gateway_api_apply
+      changed_when: gateway_api_apply.stdout is search('created|configured')
+
+    - name: Check installed istioctl version
+      ansible.builtin.command:
+        argv:
+          - istioctl
+          - version
+          - --remote=false
+          - --short
+      register: istioctl_version_check
+      changed_when: false
+      failed_when: false
+
+    - name: Download Istio using official installer script
+      ansible.builtin.shell: |
+        set -o pipefail
+        curl -L {{ istio_download_url }} | ISTIO_VERSION={{ istio_version }} sh -
+      args:
+        chdir: "{{ istio_download_dir }}"
+        executable: /bin/bash
+        creates: "{{ istio_download_dir }}/istio-{{ istio_version }}/bin/istioctl"
+      when: istioctl_version_check.rc != 0 or istio_version not in istioctl_version_check.stdout
+
+    - name: Install istioctl
+      ansible.builtin.copy:
+        src: "{{ istio_download_dir }}/istio-{{ istio_version }}/bin/istioctl"
+        dest: /usr/local/bin/istioctl
+        mode: "0755"
+        remote_src: true
+      when: istioctl_version_check.rc != 0 or istio_version not in istioctl_version_check.stdout
+
+    - name: Install or reconcile Istio control plane (ambient)
+      ansible.builtin.command:
+        argv:
+          - istioctl
+          - install
+          - --set
+          - "profile={{ istio_profile }}"
+          - --set
+          - values.global.platform=k3s
+          - --skip-confirmation
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+      register: istio_install
+      changed_when: "'No resources need to be updated' not in istio_install.stdout"
+
+    - name: Ensure PostgreSQL host data directory exists
+      ansible.builtin.file:
+        path: "{{ postgres_host_data_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Render PostgreSQL Kubernetes manifest
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/postgres-k8s.yaml.j2"
+        dest: "{{ postgres_manifest_path }}"
+        mode: "0644"
+
+    - name: Apply PostgreSQL Kubernetes manifest
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ kubeconfig_path }}"
+          - apply
+          - -f
+          - "{{ postgres_manifest_path }}"
+      register: postgres_apply
+      changed_when: postgres_apply.stdout is search('created|configured')
+
+    - name: Enable ambient dataplane mode on PostgreSQL namespace
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ kubeconfig_path }}"
+          - label
+          - namespace
+          - "{{ postgres_namespace }}"
+          - istio.io/dataplane-mode=ambient
+          - --overwrite
+      register: postgres_namespace_label
+      changed_when: "' not labeled' not in postgres_namespace_label.stdout"
+
+    - name: Wait for PostgreSQL deployment rollout
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ kubeconfig_path }}"
+          - rollout
+          - status
+          - deployment/postgres
+          - --namespace
+          - "{{ postgres_namespace }}"
+          - --timeout=180s
+      changed_when: false
+
+  handlers:
+    - name: Restart k3s
+      ansible.builtin.service:
+        name: k3s
+        state: restarted

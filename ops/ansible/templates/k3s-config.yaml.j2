@@ -1,0 +1,7 @@
+write-kubeconfig-mode: "0644"
+disable:
+{% for component in k3s_disable_components %}
+  - {{ component }}
+{% endfor %}
+kube-proxy-arg:
+  - "nodeport-addresses=127.0.0.0/8"

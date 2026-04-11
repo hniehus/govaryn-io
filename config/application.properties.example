@@ -1,7 +1,17 @@
 # Minimal local configuration for the Govaryn Kernel
 
 govaryn.kernel.id=local-kernel
-govaryn.kernel.environment=dev
+govaryn.kernel.environment=DEV
+
+# PostgreSQL runtime configuration (set per environment)
+spring.datasource.url=${SPRING_DATASOURCE_URL:}
+spring.datasource.username=${SPRING_DATASOURCE_USERNAME:}
+spring.datasource.password=${SPRING_DATASOURCE_PASSWORD:}
+spring.datasource.driver-class-name=org.postgresql.Driver
+
+# JPA/Hibernate PostgreSQL configuration
+spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
+spring.jpa.hibernate.ddl-auto=none
 
 # Reserved for future extension.
 # Supported: CLASSPATH, PLUGIN_FOLDER

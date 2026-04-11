@@ -18,7 +18,13 @@ Runnable kernel runtime for Govaryn IO.
    ```bash
    cp config/application.properties.example config/application.properties
    ```
-2. Start the kernel:
+2. Provide PostgreSQL runtime settings:
+   ```bash
+   export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/govaryn
+   export SPRING_DATASOURCE_USERNAME=your_user
+   export SPRING_DATASOURCE_PASSWORD=your_password
+   ```
+3. Start the kernel:
    ```bash
    ./run.sh
    ```
@@ -26,7 +32,7 @@ Runnable kernel runtime for Govaryn IO.
    ```bash
    mvn -pl kernel spring-boot:run -Dspring-boot.run.arguments="--spring.config.additional-location=optional:file:$(pwd)/config/"
    ```
-3. Check endpoints:
+4. Check endpoints:
    ```bash
    curl http://localhost:8080/health
    curl http://localhost:8080/actuator/health
